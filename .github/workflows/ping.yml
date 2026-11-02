@@ -1,0 +1,12 @@
+name: Runner check
+on: workflow_dispatch
+jobs:
+  ping:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-15, macos-26, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - run: sw_vers 2>/dev/null || uname -a
