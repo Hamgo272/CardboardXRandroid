@@ -14,11 +14,11 @@ namespace CardboardXR.Demos.Desktop
         const string k_Home = "https://www.google.com";
         const string k_YouTube = "https://m.youtube.com";
         const string k_LastKey = "CardboardXR.WebLast";
-        // Page pixels per meter of hand travel while scrolling.
         const float k_PixelsPerMeter = 3000f;
-        // The page's size in CSS pixels, and the picture's in texels.
-        const int k_PageWidth = 1280;
-        const int k_PageHeight = 720;
+        // A little more logical page width gives responsive sites room for their tablet layout and
+        // keeps text and controls sharper when the floating screen is enlarged.
+        const int k_PageWidth = 1600;
+        const int k_PageHeight = 900;
 
         CoreServices m_Core;
         FloatingScreen m_Screen;
@@ -105,7 +105,6 @@ namespace CardboardXR.Demos.Desktop
                     "Search or address");
         }
 
-        // An address opens; anything else goes into the field last tapped (a search box, say).
         void Submit(string text)
         {
             text = text.Trim();

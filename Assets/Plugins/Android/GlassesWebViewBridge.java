@@ -29,13 +29,18 @@ public final class GlassesWebViewBridge {
     private static Handler handler;
     private static Runnable captureTask;
     private static byte[] latestRgba;
+    private static int[] argbPixels;
+    private static byte[] rgbaPixels;
     private static long frameNumber;
     private static long copiedFrameNumber;
     private static int width;
     private static int height;
     private static volatile boolean loading;
+    private static int consecutiveWhiteFrames;
+    private static boolean hasPublishedFrame;
     private static final Object frameLock = new Object();
     private static final int CAPTURE_INTERVAL_MS = 50;
+    private static final int WHITE_FRAME_CONFIRMATIONS = 3;
 
     private GlassesWebViewBridge() { }
 
@@ -61,9 +66,14 @@ public final class GlassesWebViewBridge {
             height = requestedHeight;
             frameNumber = copiedFrameNumber = 0;
             latestRgba = null;
+            argbPixels = new int[width * height];
+            rgbaPixels = new byte[width * height * 4];
+            consecutiveWhiteFrames = 0;
+            hasPublishedFrame = false;
+            loading = true;
+
             View content = activity.findViewById(android.R.id.content);
             if (!(content instanceof ViewGroup)) return 0;
-
             container = new FrameLayout(activity);
             container.setBackgroundColor(Color.BLACK);
             webView = new android.webkit.WebView(activity);
@@ -80,7 +90,10 @@ public final class GlassesWebViewBridge {
             settings.setDisplayZoomControls(false);
             CookieManager.getInstance().setAcceptCookie(true);
             webView.setWebViewClient(new WebViewClient() {
-                @Override public void onPageStarted(android.webkit.WebView view, String url, Bitmap icon) { loading = true; }
+                @Override public void onPageStarted(android.webkit.WebView view, String url, Bitmap icon) {
+                    loading = true;
+                    consecutiveWhiteFrames = 0;
+                }
                 @Override public void onPageFinished(android.webkit.WebView view, String url) { loading = false; }
                 @Override public void onReceivedError(android.webkit.WebView view, int code, String description, String failingUrl) {
                     loading = false;
@@ -88,11 +101,12 @@ public final class GlassesWebViewBridge {
                 }
             });
             webView.setWebChromeClient(new WebChromeClient());
-            FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(requestedWidth, requestedHeight);
+            FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(width, height);
             container.addView(webView, pageParams);
             ((ViewGroup) content).addView(container, 0, new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             container.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+
             bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
             handler = new Handler(Looper.getMainLooper());
             captureTask = new Runnable() {
@@ -108,34 +122,65 @@ public final class GlassesWebViewBridge {
     }
 
     private static void captureOnUiThread() {
-        if (webView == null || bitmap == null || !webView.isAttachedToWindow()) return;
+        if (webView == null || bitmap == null || argbPixels == null || rgbaPixels == null || !webView.isAttachedToWindow()) return;
+        // Keep the last complete page visible while navigation is in progress; drawing a WebView
+        // during compositor transitions can briefly produce a solid white frame.
+        if (loading && hasPublishedFrame) return;
         try {
             int w = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY);
             int h = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY);
-            webView.measure(w, h);
-            webView.layout(0, 0, width, height);
+            if (webView.getWidth() != width || webView.getHeight() != height) {
+                webView.measure(w, h);
+                webView.layout(0, 0, width, height);
+            }
             Canvas canvas = new Canvas(bitmap);
             canvas.drawColor(Color.BLACK);
             webView.draw(canvas);
-            int[] argb = new int[width * height];
-            bitmap.getPixels(argb, 0, width, 0, 0, width, height);
-            byte[] rgba = new byte[width * height * 4];
-            // Unity texture data has a bottom-left origin; WebView coordinates have a top-left origin.
+            bitmap.getPixels(argbPixels, 0, width, 0, 0, width, height);
+
+            // A transient compositor blank is commonly a near-solid white frame. Require several
+            // consecutive samples before publishing it; real white pages still settle normally.
+            if (hasPublishedFrame && isNearlyWhite()) {
+                if (++consecutiveWhiteFrames < WHITE_FRAME_CONFIRMATIONS) return;
+            } else {
+                consecutiveWhiteFrames = 0;
+            }
+
             for (int y = 0; y < height; y++) {
                 int source = (height - 1 - y) * width;
                 int target = y * width * 4;
                 for (int x = 0; x < width; x++) {
-                    int color = argb[source + x];
-                    rgba[target++] = (byte) ((color >> 16) & 0xff);
-                    rgba[target++] = (byte) ((color >> 8) & 0xff);
-                    rgba[target++] = (byte) (color & 0xff);
-                    rgba[target++] = (byte) ((color >>> 24) & 0xff);
+                    int color = argbPixels[source + x];
+                    rgbaPixels[target++] = (byte) ((color >> 16) & 0xff);
+                    rgbaPixels[target++] = (byte) ((color >> 8) & 0xff);
+                    rgbaPixels[target++] = (byte) (color & 0xff);
+                    rgbaPixels[target++] = (byte) ((color >>> 24) & 0xff);
                 }
             }
-            synchronized (frameLock) { latestRgba = rgba; frameNumber++; }
+            synchronized (frameLock) {
+                latestRgba = rgbaPixels.clone();
+                frameNumber++;
+                hasPublishedFrame = true;
+            }
         } catch (RuntimeException e) {
             android.util.Log.w("CardboardXR.Web", "Could not capture WebView frame", e);
         }
+    }
+
+    private static boolean isNearlyWhite() {
+        int samples = 0;
+        int white = 0;
+        int stepX = Math.max(1, width / 64);
+        int stepY = Math.max(1, height / 36);
+        for (int y = 0; y < height; y += stepY) {
+            for (int x = 0; x < width; x += stepX) {
+                int color = argbPixels[y * width + x];
+                if (((color >> 16) & 0xff) > 248 && ((color >> 8) & 0xff) > 248 && (color & 0xff) > 248)
+                    white++;
+                samples++;
+            }
+        }
+        return samples > 0 && white >= samples * 0.995;
     }
 
     /** Dispatch a touch in the same top-left coordinate space as the captured page. */
@@ -192,6 +237,10 @@ public final class GlassesWebViewBridge {
             ((ViewGroup) container.getParent()).removeView(container);
         container = null;
         if (bitmap != null) { bitmap.recycle(); bitmap = null; }
+        argbPixels = null;
+        rgbaPixels = null;
+        consecutiveWhiteFrames = 0;
+        hasPublishedFrame = false;
         synchronized (frameLock) { latestRgba = null; frameNumber = copiedFrameNumber = 0; }
         activity = null;
     }
