@@ -76,7 +76,7 @@ jobs:
   xcode-build:
     name: Xcode build (unsigned .ipa)
     needs: unity-export
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 90
     permissions:
       contents: write
