@@ -3,22 +3,17 @@ using UnityEngine;
 
 namespace CardboardXR.Demos.Desktop
 {
-    // A browser on a FloatingScreen in the room, at any size: Google, YouTube and any website.
-    // Look and pinch to tap, pinch and move the hand to scroll; the buttons above go back, home,
-    // to YouTube, reload, or open the keyboard to type into the field last tapped.
+    // Browser pages are drawn into a texture. Android's WebView cannot capture video layers, so video
+    // URLs are handed to a native app instead of showing a permanently black player rectangle.
     public class WebDemo : Demo, IPinchHandler
     {
         [Tooltip("Unlit material the screen's parts are made from.")]
         [SerializeField] Material m_Material;
 
         const string k_Home = "https://www.google.com";
-        const string k_YouTube = "https://m.youtube.com";
+        const string k_YouTube = "https://www.youtube.com";
         const string k_LastKey = "CardboardXR.WebLast";
-        // Page pixels per meter of hand travel while scrolling.
         const float k_PixelsPerMeter = 3000f;
-        // Page size kept intentionally modest; we render pages by drawing a hidden Android WebView
-        // into a bitmap, and sites with video surfaces can go black if they rely on hardware video
-        // layers. Large, flat pages are stable; video-heavy pages are rejected for a clear message.
         const int k_PageWidth = 1280;
         const int k_PageHeight = 720;
 
@@ -28,8 +23,8 @@ namespace CardboardXR.Demos.Desktop
         TouchScreenKeyboard m_Keyboard;
         SurfaceKeyboard m_Keys;
         Vector2 m_Cursor = new(0.5f, 0.5f);
-        bool m_BlockVideoViewport;
-        string m_BlockMessage = "";
+        string m_StatusMessage;
+        float m_StatusUntil;
 
         public override void OnDemoEnter(CoreServices core)
         {
@@ -44,7 +39,7 @@ namespace CardboardXR.Demos.Desktop
                 Scroll = (p, meters) => m_Web.Scroll(p, meters * k_PixelsPerMeter),
             };
             m_Screen.AddButton("Back", () => m_Web.Back());
-            m_Screen.AddButton("Google", () => m_Web.Load(k_Home));
+            m_Screen.AddButton("Google", () => Open(k_Home));
             m_Screen.AddButton("YouTube", () => Open(k_YouTube));
             m_Screen.AddButton("Reload", () => m_Web.Reload());
             m_Screen.AddButton("Keyboard", ToggleKeys);
@@ -58,7 +53,7 @@ namespace CardboardXR.Demos.Desktop
                 PadTap = () => m_Web.Tap(m_Cursor),
             };
             m_Screen.PlaceInFront(core.Head);
-            m_Web.Load(PlayerPrefs.GetString(k_LastKey, k_Home));
+            Open(PlayerPrefs.GetString(k_LastKey, k_Home));
         }
 
         public override void OnDemoExit(CoreServices core)
@@ -77,22 +72,10 @@ namespace CardboardXR.Demos.Desktop
         {
             if (m_Screen == null)
                 return;
-
-            if (m_BlockVideoViewport)
-            {
-                m_Screen.Interactive = false;
-                m_Screen.Show(null, 0f, m_BlockMessage);
-                m_Screen.Update(m_Core.Head, m_Core.HandTracker);
-                m_Keys.Update(m_Core.Head, m_Core.HandTracker);
-                if (!m_Keys.Visible)
-                    m_Screen.SetCursor(null);
-                return;
-            }
-
             m_Web.Update();
             m_Screen.Interactive = m_Web.HasFrame;
-            m_Screen.Show(m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect,
-                WebView.Supported ? "Loading..." : "The browser runs on the iPhone.");
+            var status = Time.unscaledTime < m_StatusUntil ? m_StatusMessage : "Loading...";
+            m_Screen.Show(m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect, status);
             m_Screen.Update(m_Core.Head, m_Core.HandTracker);
             m_Keys.Update(m_Core.Head, m_Core.HandTracker);
             if (!m_Keys.Visible)
@@ -121,7 +104,6 @@ namespace CardboardXR.Demos.Desktop
                     "Search or address");
         }
 
-        // An address opens; anything else goes into the field last tapped (a search box, say).
         void Submit(string text)
         {
             text = text.Trim();
@@ -140,20 +122,26 @@ namespace CardboardXR.Demos.Desktop
             url = url?.Trim();
             if (string.IsNullOrEmpty(url))
                 return;
-
-            if (IsVideoPage(url))
+            if (IsVideoPage(url) && m_Web.OpenExternal(url))
             {
-                m_BlockVideoViewport = true;
-                m_BlockMessage = "Android WebView cannot render YouTube / video pages without a black frame. Use Computer Screen instead.";
-                m_Web.Load("about:blank");
                 PlayerPrefs.SetString(k_LastKey, url);
+                m_StatusMessage = "Video opened in the installed app/browser. Return to CardboardXR to continue.";
+                m_StatusUntil = Time.unscaledTime + 12f;
                 return;
             }
 
-            m_BlockVideoViewport = false;
-            m_BlockMessage = "";
             PlayerPrefs.SetString(k_LastKey, url);
             m_Web.Load(url);
+            if (IsVideoPage(url))
+            {
+                m_StatusMessage = "This Android WebView cannot capture video playback. Install a video app, or use Computer Screen.";
+                m_StatusUntil = Time.unscaledTime + 12f;
+            }
+            else
+            {
+                m_StatusMessage = "";
+                m_StatusUntil = 0f;
+            }
         }
 
         static bool IsVideoPage(string url)

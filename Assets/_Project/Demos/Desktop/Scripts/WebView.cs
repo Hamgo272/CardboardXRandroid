@@ -36,6 +36,7 @@ namespace CardboardXR.Demos.Desktop
         static void GlassesWeb_Load(string url) => Bridge.CallStatic("load", url);
         static void GlassesWeb_Eval(string script) => Bridge.CallStatic("evaluate", script);
         static void GlassesWeb_Tap(float x, float y) => Bridge.CallStatic("tap", x, y);
+        static bool GlassesWeb_OpenExternal(string url) => Bridge.CallStatic<bool>("openExternal", url);
         static void GlassesWeb_Back() => Bridge.CallStatic("back");
         static void GlassesWeb_Reload() => Bridge.CallStatic("reload");
         static int GlassesWeb_IsLoading() => Bridge.CallStatic<bool>("isLoading") ? 1 : 0;
@@ -64,33 +65,23 @@ namespace CardboardXR.Demos.Desktop
 
         const string k_Tap =
             "(function(x,y){var e=document.elementFromPoint(x,y);if(!e)return;" +
-            "if(e.focus)e.focus();var o={bubbles:true,cancelable:true,view:window,clientX:x,clientY:y};" +
-            "try{e.dispatchEvent(new PointerEvent('pointerdown',Object.assign({pointerId:1,pointerType:'touch'},o)));}catch(_){}" +
-            "e.dispatchEvent(new MouseEvent('mousedown',o));e.dispatchEvent(new MouseEvent('mouseup',o));e.click();})({0},{1})";
+            "var o={bubbles:true,cancelable:true,view:window,clientX:x,clientY:y};" +
+            "['pointerdown','mousedown','pointerup','mouseup'].forEach(function(t){try{e.dispatchEvent(" +
+            "t.indexOf('pointer')==0?new PointerEvent(t,o):new MouseEvent(t,o));}catch(_){}});" +
+            "if(e.focus)e.focus();e.click();})({0},{1})";
         const string k_Scroll =
             "(function(x,y,d){var e=document.elementFromPoint(x,y);while(e&&e!==document.body){" +
             "var s=getComputedStyle(e);if((s.overflowY=='auto'||s.overflowY=='scroll')&&e.scrollHeight>e.clientHeight)" +
             "{e.scrollBy(0,d);return;}e=e.parentElement;}window.scrollBy(0,d);})({0},{1},{2})";
         const string k_Type =
-            "(function(t){var e=document.activeElement;if(!e)return;if('value' in e){" +
-            "var a=e.selectionStart==null?e.value.length:e.selectionStart,b=e.selectionEnd==null?a:e.selectionEnd;" +
-            "e.value=e.value.slice(0,a)+t+e.value.slice(b);e.setSelectionRange(a+t.length,a+t.length);}" +
-            "else if(e.isContentEditable)document.execCommand('insertText',false,t);" +
-            "e.dispatchEvent(new InputEvent('input',{bubbles:true,data:t,inputType:'insertText'}));})({0})";
-        const string k_Insert =
-            "(function(t){var e=document.activeElement;if(!e)return;if('value' in e){" +
-            "var a=e.selectionStart==null?e.value.length:e.selectionStart,b=e.selectionEnd==null?a:e.selectionEnd;" +
-            "e.value=e.value.slice(0,a)+t+e.value.slice(b);try{e.setSelectionRange(a+t.length,a+t.length);}catch(_){}}" +
-            "else if(e.isContentEditable)document.execCommand('insertText',false,t);" +
-            "e.dispatchEvent(new InputEvent('input',{bubbles:true,data:t,inputType:'insertText'}));})({0})";
-        const string k_Delete =
-            "(function(){var e=document.activeElement;if(!e)return;if('value' in e){" +
-            "var a=e.selectionStart==null?e.value.length:e.selectionStart,b=e.selectionEnd==null?a:e.selectionEnd;" +
-            "if(a===b&&a>0)a--;e.value=e.value.slice(0,a)+e.value.slice(b);try{e.setSelectionRange(a,a);}catch(_){}" +
-            "e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}));}" +
-            "else if(e.isContentEditable)document.execCommand('delete');})()";
+            "(function(t){var e=document.activeElement;if(!e||!('value' in e))return;e.value=t;" +
+            "e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));" +
+            "if(e.form){if(e.form.requestSubmit)e.form.requestSubmit();else e.form.submit();}})({0})";
+        const string k_Insert = "document.execCommand('insertText',false,{0})";
+        const string k_Delete = "document.execCommand('delete')";
         const string k_Enter =
-            "(function(){var e=document.activeElement;if(!e)return;" +
+            "(function(){var e=document.activeElement;if(!e)return;var o={key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true};" +
+            "e.dispatchEvent(new KeyboardEvent('keydown',o));e.dispatchEvent(new KeyboardEvent('keyup',o));" +
             "if(e.tagName=='TEXTAREA'||e.isContentEditable){document.execCommand('insertLineBreak');return;}" +
             "if(e.form){if(e.form.requestSubmit)e.form.requestSubmit();else e.form.submit();}})()";
 
@@ -120,6 +111,17 @@ namespace CardboardXR.Demos.Desktop
             GlassesWeb_Load(url);
         }
 
+        // Video in an Android WebView is often rendered in a separate protected/hardware surface,
+        // which cannot be copied into the browser texture. Hand it off to the installed video app/browser.
+        public bool OpenExternal(string url)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return GlassesWeb_OpenExternal(url);
+#else
+            return false;
+#endif
+        }
+
         public void Back() => GlassesWeb_Back();
         public void Reload() => GlassesWeb_Reload();
 
@@ -135,7 +137,6 @@ namespace CardboardXR.Demos.Desktop
 
         public void Scroll(Vector2 point, float pixels) =>
             GlassesWeb_Eval(Fill(k_Scroll, Number(point.x * m_Width), Number(point.y * m_Height), Number(pixels)));
-
         public void Type(string text) => GlassesWeb_Eval(Fill(k_Type, Quote(text)));
         public void InsertText(string text) => GlassesWeb_Eval(Fill(k_Insert, Quote(text)));
         public void Backspace() => GlassesWeb_Eval(k_Delete);
