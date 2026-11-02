@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace CardboardXR.Demos.Desktop
 {
-    // Unity's side of the native browser (Assets/Plugins/iOS/GlassesWebView.mm): a texture that
-    // follows the page, and input as JavaScript. iPhone only; elsewhere Supported is false.
+    // Unity-side adapter for the native browser. iOS uses WKWebView; Android uses an off-screen
+    // Android WebView rendered into a bitmap. Other platforms keep the browser demo unavailable.
     public sealed class WebView : IDisposable
     {
 #if UNITY_IOS && !UNITY_EDITOR
@@ -19,6 +19,35 @@ namespace CardboardXR.Demos.Desktop
         [DllImport("__Internal")] static extern int GlassesWeb_CopyFrame(byte[] buffer, int length, int lastFrame);
         [DllImport("__Internal")] static extern void GlassesWeb_Destroy();
         public static bool Supported => true;
+#elif UNITY_ANDROID && !UNITY_EDITOR
+        static AndroidJavaClass s_Bridge;
+
+        static AndroidJavaClass Bridge
+        {
+            get
+            {
+                if (s_Bridge == null)
+                    s_Bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge");
+                return s_Bridge;
+            }
+        }
+
+        static int GlassesWeb_Create(int width, int height) => Bridge.CallStatic<int>("create", width, height);
+        static void GlassesWeb_Load(string url) => Bridge.CallStatic("load", url);
+        static void GlassesWeb_Eval(string script) => Bridge.CallStatic("evaluate", script);
+        static void GlassesWeb_Back() => Bridge.CallStatic("back");
+        static void GlassesWeb_Reload() => Bridge.CallStatic("reload");
+        static int GlassesWeb_IsLoading() => Bridge.CallStatic<bool>("isLoading") ? 1 : 0;
+        static byte[] GlassesWeb_CopyFrame() => Bridge.CallStatic<byte[]>("copyFrame");
+        static void GlassesWeb_Destroy()
+        {
+            if (s_Bridge == null)
+                return;
+            s_Bridge.CallStatic("destroy");
+            s_Bridge.Dispose();
+            s_Bridge = null;
+        }
+        public static bool Supported => true;
 #else
         static int GlassesWeb_Create(int width, int height) => 0;
         static void GlassesWeb_Load(string url) { }
@@ -27,6 +56,7 @@ namespace CardboardXR.Demos.Desktop
         static void GlassesWeb_Reload() { }
         static int GlassesWeb_IsLoading() => 0;
         static int GlassesWeb_CopyFrame(byte[] buffer, int length, int lastFrame) => -1;
+        static byte[] GlassesWeb_CopyFrame() => null;
         static void GlassesWeb_Destroy() { }
         public static bool Supported => false;
 #endif
@@ -97,7 +127,7 @@ namespace CardboardXR.Demos.Desktop
             GlassesWeb_Eval(Fill(k_Scroll, Number(point.x * m_Width), Number(point.y * m_Height), Number(pixels)));
 
         public void Type(string text) =>
-            GlassesWeb_Eval(Fill(k_Type, "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""));
+            GlassesWeb_Eval(Fill(k_Type, Quote(text)));
 
         public void InsertText(string text) => GlassesWeb_Eval(Fill(k_Insert, Quote(text)));
         public void Backspace() => GlassesWeb_Eval(k_Delete);
@@ -118,10 +148,18 @@ namespace CardboardXR.Demos.Desktop
         // Copies a newer picture into Texture; true if there was one.
         public bool Update()
         {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            var frame = GlassesWeb_CopyFrame();
+            if (frame == null || frame.Length != m_Buffer.Length)
+                return false;
+            Buffer.BlockCopy(frame, 0, m_Buffer, 0, m_Buffer.Length);
+            m_Frame++;
+#else
             var frame = GlassesWeb_CopyFrame(m_Buffer, m_Buffer.Length, m_Frame);
             if (frame < 0)
                 return false;
             m_Frame = frame;
+#endif
             Texture.LoadRawTextureData(m_Buffer);
             Texture.Apply(false);
             return true;
