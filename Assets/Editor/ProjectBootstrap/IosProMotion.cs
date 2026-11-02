@@ -37,7 +37,19 @@ namespace ProjectBootstrap
             // so videos can be copied into Documents/Videos for the video demo.
             plist.root.SetBoolean("UIFileSharingEnabled", true);
             plist.root.SetBoolean("LSSupportsOpeningDocumentsInPlace", true);
+            // The Computer Screen demo talks to the computer on the local Wi-Fi over plain HTTP.
+            plist.root.SetString("NSLocalNetworkUsageDescription",
+                "CardboardXR finds your computer on your Wi-Fi to show its screen in the Computer Screen demo.");
+            var ats = plist.root["NSAppTransportSecurity"] as PlistElementDict ?? plist.root.CreateDict("NSAppTransportSecurity");
+            ats.SetBoolean("NSAllowsLocalNetworking", true);
             plist.WriteToFile(path);
+
+            // The Browser demo's native view (Plugins/iOS/GlassesWebView.mm) needs WebKit.
+            var projectPath = PBXProject.GetPBXProjectPath(report.summary.outputPath);
+            var project = new PBXProject();
+            project.ReadFromFile(projectPath);
+            project.AddFrameworkToProject(project.GetUnityFrameworkTargetGuid(), "WebKit.framework", false);
+            project.WriteToFile(projectPath);
             Debug.Log("[ProjectSetup] ProMotion allowed: the display can run above 60 fps. Documents shared with Finder and Files.");
         }
     }

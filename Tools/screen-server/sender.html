@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>Glasses — שיתוף מסך</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 26px; }
+  button { font: inherit; font-size: 20px; padding: 12px 28px; border: 0; border-radius: 12px; background: #2a6df4; color: #fff; cursor: pointer; }
+  button.stop { background: #b33; }
+  select { font: inherit; padding: 6px; border-radius: 8px; background: #222; color: #eee; }
+  .row { margin: 16px 0; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .card { background: #1c1c1c; border-radius: 12px; padding: 16px; margin: 16px 0; line-height: 1.7; }
+  .ok { color: #5d5; } .wait { color: #fb4; }
+  video { width: 100%; border-radius: 8px; margin-top: 12px; background: #000; }
+  code { direction: ltr; display: inline-block; }
+</style>
+</head>
+<body>
+<h1>שיתוף המסך למשקפיים</h1>
+<div class="card">
+  1. לחץ <b>שתף</b> ובחר <b>את כל המסך</b> (לא חלון), כדי שהלחיצות מהמשקפיים ינחתו במקום הנכון.<br>
+  2. באייפון, פתח את האפליקציה ובחר <b>Computer Screen</b>. הטלפון מוצא את המחשב לבד, כשהם על אותה רשת Wi‑Fi.
+     בפעם הראשונה יופיע כאן כפתור <b>אשר</b>: רק מכשיר שאישרת יכול לראות את המסך ולשלוט בעכבר.<br>
+  3. השאר את הדף הזה פתוח (אפשר להקטין אותו). הסאונד ממשיך לצאת מהמחשב.
+</div>
+<div class="row">
+  <button id="go">שתף</button>
+  <label>איכות <select id="width"><option value="1280">720p (מומלץ)</option><option value="1920">1080p</option><option value="960">540p (רשת חלשה)</option></select></label>
+  <label>פריימים <select id="fps"><option>24</option><option>30</option><option>15</option></select></label>
+</div>
+<div class="card" id="status">ממתין לשיתוף…</div>
+<div class="card" id="pending" hidden></div>
+<video id="preview" muted playsinline></video>
+<script>
+const go = document.getElementById('go');
+const statusEl = document.getElementById('status');
+const preview = document.getElementById('preview');
+let stream = null, timer = null, busy = false, sent = 0, lastSent = 0;
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+
+go.onclick = async () => {
+  if (stream) return stop();
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
+  } catch (e) { statusEl.textContent = 'השיתוף בוטל.'; return; }
+  preview.srcObject = stream;
+  await preview.play();
+  stream.getVideoTracks()[0].onended = stop;
+  go.textContent = 'עצור'; go.className = 'stop';
+  schedule();
+};
+
+function schedule() {
+  clearInterval(timer);
+  timer = setInterval(tick, 1000 / parseInt(document.getElementById('fps').value, 10));
+}
+document.getElementById('fps').onchange = () => stream && schedule();
+
+function stop() {
+  clearInterval(timer); timer = null;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; preview.srcObject = null;
+  go.textContent = 'שתף'; go.className = '';
+}
+
+// One frame in flight at a time: a slow network lowers the frame rate instead of piling up.
+function tick() {
+  if (!stream || busy || !preview.videoWidth) return;
+  const settings = stream.getVideoTracks()[0].getSettings();
+  const w = Math.min(parseInt(document.getElementById('width').value, 10), preview.videoWidth);
+  const h = Math.round(w * preview.videoHeight / preview.videoWidth);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.drawImage(preview, 0, 0, w, h);
+  busy = true;
+  canvas.toBlob(async (blob) => {
+    try {
+      await fetch('/push', { method: 'POST', body: blob, headers: {
+        'X-Width': String(preview.videoWidth), 'X-Height': String(preview.videoHeight),
+        'X-Kind': settings.displaySurface || 'monitor' } });
+      sent++;
+    } catch (e) { /* server restarting */ }
+    busy = false;
+  }, 'image/jpeg', 0.72);
+}
+
+setInterval(async () => {
+  try {
+    const s = await (await fetch('/status')).json();
+    const fps = (sent - lastSent); lastSent = sent;
+    statusEl.innerHTML =
+      (stream ? `<span class="ok">● משתף</span> · ${fps} פריימים בשנייה` : '<span class="wait">● לא משתף</span>') + '<br>' +
+      (s.phone ? '<span class="ok">● האייפון מחובר</span>' : '<span class="wait">● מחכה לאייפון…</span>') + '<br>' +
+      'כתובת המחשב (אם צריך להקליד ידנית): ' + s.addresses.map(a => `<code>${a}</code>`).join(' , ');
+    const pendingEl = document.getElementById('pending');
+    pendingEl.hidden = s.pending.length === 0;
+    pendingEl.innerHTML = s.pending.map(a =>
+      `מכשיר <code>${a}</code> מבקש לראות את המסך ולשלוט בעכבר. <button onclick="approve('${a}')">אשר</button>`).join('<br>');
+  } catch (e) { statusEl.textContent = 'השרת לא פועל. הפעל את start.bat.'; }
+}, 1000);
+async function approve(address) { await fetch('/approve', { method: 'POST', body: address }); }
+</script>
+</body>
+</html>

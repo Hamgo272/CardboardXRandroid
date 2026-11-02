@@ -13,6 +13,12 @@ MonoBehaviour:
   m_Name: DemoCatalog
   m_EditorClassIdentifier: CardboardXR.Demos::CardboardXR.Demos.DemoCatalog
   m_LobbyScenePath: Assets/_Project/Demos/Lobby/Lobby.unity
+  m_LobbyRequirements:
+    SixDof: 2
+    Passthrough: 2
+    Hands: 2
+    ScanSurfaces: 0
+    KeepPlacedObjects: 0
   m_Demos:
   - Id: sandbox
     Title: Cube Sandbox
@@ -27,7 +33,6 @@ MonoBehaviour:
       Hands: 2
       ScanSurfaces: 1
       KeepPlacedObjects: 0
-      HideCorePanel: 0
   - Id: video
     Title: 360 Video
     Description: Watch 360 and VR180 videos, 2D or 3D, all around you. Tap the video for the controls. Plays videos copied to the phone or linked from Google Drive.
@@ -41,7 +46,6 @@ MonoBehaviour:
       Hands: 1
       ScanSurfaces: 0
       KeepPlacedObjects: 0
-      HideCorePanel: 1
   - Id: paint
     Title: Air Paint
     Description: Paint in the air around you with your hand, like Tilt Brush. Pinch to paint; look at the tool panel and pinch to change color, brush and size.
@@ -55,7 +59,6 @@ MonoBehaviour:
       Hands: 2
       ScanSurfaces: 0
       KeepPlacedObjects: 0
-      HideCorePanel: 1
   - Id: rush
     Title: Orb Rush
     Description: 'Orbs fly toward you: hit them with your hand as they reach the rings. One hand, a minute a round, getting faster.'
@@ -69,7 +72,6 @@ MonoBehaviour:
       Hands: 2
       ScanSurfaces: 0
       KeepPlacedObjects: 0
-      HideCorePanel: 1
   - Id: portal
     Title: Portal
     Description: Open a doorway on your floor and walk through it into another world, then look back at your room through the door.
@@ -83,4 +85,29 @@ MonoBehaviour:
       Hands: 2
       ScanSurfaces: 0
       KeepPlacedObjects: 0
-      HideCorePanel: 1
+  - Id: web
+    Title: Browser
+    Description: Google, YouTube and any website on a screen in your room, at any size. Look and pinch to tap, pinch and move your hand to scroll. Grab the bar to move it and the corner to resize.
+    Tagline: A doorway on your floor into another world
+    Icon: door_front
+    Tint: {r: 0.23, g: 0.25, b: 0.6, a: 1}
+    ScenePath: Assets/_Project/Demos/Web/Web.unity
+    Requirements:
+      SixDof: 2
+      Passthrough: 2
+      Hands: 2
+      ScanSurfaces: 0
+      KeepPlacedObjects: 0
+  - Id: desktop
+    Title: Computer Screen
+    Description: Your computer's screen on a screen in your room, at any size. Look and pinch to click, pinch and move your hand to scroll. Grab the bar to move it and the corner to resize. Run Tools/screen-server on the computer.
+    Tagline: A doorway on your floor into another world
+    Icon: door_front
+    Tint: {r: 0.23, g: 0.25, b: 0.6, a: 1}
+    ScenePath: Assets/_Project/Demos/Desktop/Desktop.unity
+    Requirements:
+      SixDof: 2
+      Passthrough: 2
+      Hands: 2
+      ScanSurfaces: 0
+      KeepPlacedObjects: 0

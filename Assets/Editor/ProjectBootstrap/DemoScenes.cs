@@ -1,4 +1,5 @@
 using CardboardXR.Demos;
+using CardboardXR.Demos.Desktop;
 using CardboardXR.Demos.Paint;
 using CardboardXR.Demos.Portal;
 using CardboardXR.Demos.Rush;
@@ -32,6 +33,10 @@ namespace ProjectBootstrap
         const string RushScene = RushFolder + "/Rush.unity";
         const string PortalFolder = DemosFolder + "/Portal";
         const string PortalScene = PortalFolder + "/Portal.unity";
+        const string DesktopFolder = DemosFolder + "/Desktop";
+        const string DesktopScene = DesktopFolder + "/Desktop.unity";
+        const string WebFolder = DemosFolder + "/Web";
+        const string WebScene = WebFolder + "/Web.unity";
         const string DepthMaskShaderPath = "Assets/_Project/Shaders/DepthMask.shader";
         const string UnlitShaderName = "Universal Render Pipeline/Unlit";
 
@@ -51,6 +56,8 @@ namespace ProjectBootstrap
             EnsurePaint();
             EnsureRush();
             EnsurePortal();
+            EnsureDesktop();
+            EnsureWeb();
             AssetDatabase.SaveAssets();
             return catalog;
         }
@@ -90,6 +97,18 @@ namespace ProjectBootstrap
             EnsureEntry(catalog, "portal", "Portal",
                 "Open a doorway on your floor and walk through it into another world, then look back at your room through the door.",
                 PortalScene, new DemoRequirements
+                {
+                    SixDof = Need.On, Passthrough = Need.On, Hands = Need.On,
+                });
+            EnsureEntry(catalog, "web", "Browser",
+                "Google, YouTube and any website on a screen in your room, at any size. Look and pinch to tap, pinch and move your hand to scroll. Grab the bar to move it and the corner to resize.",
+                WebScene, new DemoRequirements
+                {
+                    SixDof = Need.On, Passthrough = Need.On, Hands = Need.On,
+                });
+            EnsureEntry(catalog, "desktop", "Computer Screen",
+                "Your computer's screen on a screen in your room, at any size. Look and pinch to click, pinch and move your hand to scroll. Grab the bar to move it and the corner to resize. Run Tools/screen-server on the computer.",
+                DesktopScene, new DemoRequirements
                 {
                     SixDof = Need.On, Passthrough = Need.On, Hands = Need.On,
                 });
@@ -195,6 +214,39 @@ namespace ProjectBootstrap
 
             EditorSceneManager.SaveScene(scene, VideoScene);
             Debug.Log($"[DemoScenes] Made {VideoScene}");
+        }
+
+        // Computer Screen: the demo builds its screen at runtime from one unlit material, saved here so
+        // the build keeps the shader.
+        static void EnsureDesktop()
+        {
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(DesktopScene) != null)
+                return;
+            StereoBuilder.EnsureFolder(DesktopFolder);
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var material = StereoBuilder.CreateMaterial("Desktop Screen", Shader.Find(UnlitShaderName), Color.white, null, 1f, DesktopFolder);
+            var demo = new GameObject("Desktop Demo").AddComponent<DesktopDemo>();
+            var serialized = new SerializedObject(demo);
+            serialized.FindProperty("m_Material").objectReferenceValue = material;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorSceneManager.SaveScene(scene, DesktopScene);
+            Debug.Log($"[DemoScenes] Made {DesktopScene}");
+        }
+
+        // Browser: like the Computer Screen, one unlit material for the screen it builds at runtime.
+        static void EnsureWeb()
+        {
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(WebScene) != null)
+                return;
+            StereoBuilder.EnsureFolder(WebFolder);
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var material = StereoBuilder.CreateMaterial("Browser Screen", Shader.Find(UnlitShaderName), Color.white, null, 1f, WebFolder);
+            var demo = new GameObject("Web Demo").AddComponent<WebDemo>();
+            var serialized = new SerializedObject(demo);
+            serialized.FindProperty("m_Material").objectReferenceValue = material;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorSceneManager.SaveScene(scene, WebScene);
+            Debug.Log($"[DemoScenes] Made {WebScene}");
         }
 
         // Air Paint: the stroke materials, a dark floor grid for VR, and the demo.

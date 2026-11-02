@@ -1,0 +1,140 @@
+# Builds an unsigned iPhone app (.ipa) without a Mac of our own:
+#   1. Unity, on Linux, exports the Xcode project (ProjectBootstrap.StereoBuilder.BuildIos).
+#   2. Xcode, on a GitHub macOS runner, compiles it without signing.
+#   3. The .ipa is attached to the "latest-iphone" release; Sideloadly on Windows signs it with a
+#      free Apple ID and installs it on the phone.
+#
+# Needs these repository secrets (Settings > Secrets and variables > Actions), set once by the owner:
+#   UNITY_LICENSE   contents of the Unity Personal license file (Unity_lic.ulf)
+#   UNITY_EMAIL     the Unity account's email
+#   UNITY_PASSWORD  the Unity account's password
+# Standard GitHub-hosted runners are free for public repositories.
+
+name: iPhone build
+
+# Started by hand until the Unity secrets are set; ios-xcode.yml is the route in use meanwhile.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: true
+
+jobs:
+  unity-export:
+    name: Unity export (Xcode project)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      # Unity's Docker image plus the project's Library need more room than the runner starts with.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: false
+          swap-storage: true
+
+      - uses: actions/checkout@v4
+
+      - name: Restore Unity Library cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-iOS-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-${{ hashFiles('Assets/**/*.meta') }}
+          restore-keys: |
+            Library-iOS-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}-
+            Library-iOS-
+
+      - name: Unity build (iOS export)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          buildMethod: ProjectBootstrap.StereoBuilder.BuildIos
+          allowDirtyBuild: true
+
+      # Tar keeps the Xcode project's symlinks and file modes, which artifacts alone would lose.
+      - name: Pack Xcode project
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" Builds
+          tar -czf xcode-project.tgz -C Builds iOS
+          ls -lh xcode-project.tgz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xcode-project
+          path: xcode-project.tgz
+          retention-days: 3
+          compression-level: 0
+
+  xcode-build:
+    name: Xcode build (unsigned .ipa)
+    needs: unity-export
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: xcode-project
+
+      - name: Unpack
+        run: |
+          mkdir -p Builds
+          tar -xzf xcode-project.tgz -C Builds
+
+      - name: Build without signing
+        working-directory: Builds/iOS
+        run: |
+          set -o pipefail
+          xcodebuild -project Unity-iPhone.xcodeproj -scheme Unity-iPhone \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            build | tee "$RUNNER_TEMP/xcode.log" | grep -E "error:|warning: .*deprecated|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/xcode.log"
+
+      - name: Package .ipa
+        run: |
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -1)
+          test -n "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry CardboardXR-iPhone.ipa Payload
+          ls -lh CardboardXR-iPhone.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CardboardXR-iPhone
+          path: CardboardXR-iPhone.ipa
+          retention-days: 14
+
+      # A stable download link for the newest build.
+      - name: Publish to the latest-iphone release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-iphone
+          name: Latest iPhone build
+          prerelease: true
+          body: |
+            Unsigned build ${{ github.run_number }} from ${{ github.sha }}.
+            Install with Sideloadly (free Apple ID) — see PLAN_HE.md.
+          files: CardboardXR-iPhone.ipa
+
+      - name: Keep the Xcode log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-log
+          path: ${{ runner.temp }}/xcode.log

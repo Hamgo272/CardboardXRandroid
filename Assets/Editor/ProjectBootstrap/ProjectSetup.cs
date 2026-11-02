@@ -57,7 +57,9 @@ namespace ProjectBootstrap
             PlayerSettings.enableFrameTimingStats = true;
 
             var ios = NamedBuildTarget.iOS;
-            PlayerSettings.SetApplicationIdentifier(ios, "com.brenpoly.cardboardxr");
+            // Our own id: an iOS bundle id belongs to the Apple team that first signed it, and
+            // com.brenpoly.cardboardxr is the original author's.
+            PlayerSettings.SetApplicationIdentifier(ios, "com.glassesxr.cardboardxr");
             PlayerSettings.SetScriptingBackend(ios, ScriptingImplementation.IL2CPP);
             // AR Foundation 6 needs iOS 12; 14 is where the LiDAR depth on the iPhone Pro arrived.
             PlayerSettings.iOS.targetOSVersionString = "14.0";
