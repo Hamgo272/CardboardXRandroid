@@ -20,7 +20,7 @@ import com.unity3d.player.UnityPlayer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
-/** Android browser bridge. The hidden WebView draws into a bottom-up RGBA frame for Unity. */
+/** Android browser bridge. Hidden WebView renders into bottom-up RGBA frames for Unity. */
 public final class GlassesWebViewBridge {
     private static Activity activity;
     private static FrameLayout container;
@@ -88,9 +88,8 @@ public final class GlassesWebViewBridge {
                 }
             });
             webView.setWebChromeClient(new WebChromeClient());
-            container.addView(webView, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            // Keep the WebView attached underneath Unity; dispatch synthetic touch events directly to it.
+            FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(requestedWidth, requestedHeight);
+            container.addView(webView, pageParams);
             ((ViewGroup) content).addView(container, 0, new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             container.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
@@ -121,7 +120,7 @@ public final class GlassesWebViewBridge {
             int[] argb = new int[width * height];
             bitmap.getPixels(argb, 0, width, 0, 0, width, height);
             byte[] rgba = new byte[width * height * 4];
-            // Unity texture raw data starts at the bottom row; Android Bitmap starts at the top.
+            // Unity texture data has a bottom-left origin; WebView coordinates have a top-left origin.
             for (int y = 0; y < height; y++) {
                 int source = (height - 1 - y) * width;
                 int target = y * width * 4;
@@ -139,14 +138,16 @@ public final class GlassesWebViewBridge {
         }
     }
 
-    /** Dispatch a real Android WebView touch sequence so site buttons receive trusted user input. */
+    /** Dispatch a touch in the same top-left coordinate space as the captured page. */
     public static void tap(final float x, final float y) {
         onUiThread(() -> {
             if (webView == null) return null;
             webView.requestFocus();
             long now = android.os.SystemClock.uptimeMillis();
-            float px = Math.max(0, Math.min(width - 1, x));
-            float py = Math.max(0, Math.min(height - 1, y));
+            float sx = width == 0 ? 1f : (float) webView.getWidth() / width;
+            float sy = height == 0 ? 1f : (float) webView.getHeight() / height;
+            float px = Math.max(0, Math.min(webView.getWidth() - 1, x * sx));
+            float py = Math.max(0, Math.min(webView.getHeight() - 1, y * sy));
             MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, px, py, 0);
             MotionEvent up = MotionEvent.obtain(now, now + 60, MotionEvent.ACTION_UP, px, py, 0);
             webView.dispatchTouchEvent(down);
@@ -167,7 +168,6 @@ public final class GlassesWebViewBridge {
     public static void reload() { onUiThread(() -> { if (webView != null) webView.reload(); return null; }, null); }
     public static boolean isLoading() { return loading; }
 
-    /** Returns one fresh RGBA frame, or null until another captured frame is available. */
     public static byte[] copyFrame() {
         synchronized (frameLock) {
             if (latestRgba == null || copiedFrameNumber == frameNumber) return null;

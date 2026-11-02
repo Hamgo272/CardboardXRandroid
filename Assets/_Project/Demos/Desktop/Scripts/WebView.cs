@@ -123,11 +123,11 @@ namespace CardboardXR.Demos.Desktop
         public void Back() => GlassesWeb_Back();
         public void Reload() => GlassesWeb_Reload();
 
-        // Screen coordinates are normalized with origin at the picture's top-left.
+        // Normalized picture coordinates use a top-left origin, matching the browser and page pixels.
         public void Tap(Vector2 point)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            GlassesWeb_Tap(Mathf.Clamp01(point.x) * m_Width, (1f - Mathf.Clamp01(point.y)) * m_Height);
+            GlassesWeb_Tap(Mathf.Clamp01(point.x) * m_Width, Mathf.Clamp01(point.y) * m_Height);
 #else
             GlassesWeb_Eval(Fill(k_Tap, Number(point.x * m_Width), Number(point.y * m_Height)));
 #endif
