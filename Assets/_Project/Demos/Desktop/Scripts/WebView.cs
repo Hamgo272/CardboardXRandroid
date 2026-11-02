@@ -20,7 +20,6 @@ namespace CardboardXR.Demos.Desktop
         [DllImport("__Internal")] static extern void GlassesWeb_Destroy();
         public static bool Supported => true;
 #elif UNITY_ANDROID && !UNITY_EDITOR
-        [DllImport("__Internal")] static extern void GlassesWeb_Tap(float x, float y);
         static AndroidJavaClass s_Bridge;
 
         static AndroidJavaClass Bridge
@@ -36,6 +35,7 @@ namespace CardboardXR.Demos.Desktop
         static int GlassesWeb_Create(int width, int height) => Bridge.CallStatic<int>("create", width, height);
         static void GlassesWeb_Load(string url) => Bridge.CallStatic("load", url);
         static void GlassesWeb_Eval(string script) => Bridge.CallStatic("evaluate", script);
+        static void GlassesWeb_Tap(float x, float y) => Bridge.CallStatic("tap", x, y);
         static void GlassesWeb_Back() => Bridge.CallStatic("back");
         static void GlassesWeb_Reload() => Bridge.CallStatic("reload");
         static int GlassesWeb_IsLoading() => Bridge.CallStatic<bool>("isLoading") ? 1 : 0;
