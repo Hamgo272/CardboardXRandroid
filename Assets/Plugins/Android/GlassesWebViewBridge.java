@@ -3,6 +3,7 @@ package com.glassesxr.cardboardxr;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -141,17 +142,31 @@ public final class GlassesWebViewBridge {
         }
     }
 
-    /** Launch video URLs in Android's installed video app/browser; WebView texture capture cannot capture video surfaces. */
+    /** Launch a video URL in its dedicated app when installed; otherwise use the system browser. */
     public static boolean openExternal(final String url) {
         return onUiThread(() -> {
             if (activity == null || url == null || !(url.startsWith("https://") || url.startsWith("http://")))
                 return false;
             try {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                Uri uri = Uri.parse(url);
+                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                String host = uri.getHost();
+                if (host != null && (host.equalsIgnoreCase("youtube.com") || host.endsWith(".youtube.com") ||
+                        host.equalsIgnoreCase("youtu.be") || host.equalsIgnoreCase("www.youtu.be"))) {
+                    intent.setPackage("com.google.android.youtube");
+                    PackageManager pm = activity.getPackageManager();
+                    if (intent.resolveActivity(pm) == null) {
+                        intent.setPackage(null);
+                        if (intent.resolveActivity(pm) == null) return false;
+                    }
+                } else if (intent.resolveActivity(activity.getPackageManager()) == null) {
+                    return false;
+                }
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 activity.startActivity(intent);
                 android.util.Log.i("CardboardXR.Web", "Opened video externally: " + url);
                 return true;
-            } catch (ActivityNotFoundException e) {
+            } catch (ActivityNotFoundException | SecurityException e) {
                 android.util.Log.w("CardboardXR.Web", "No app can open URL: " + url, e);
                 return false;
             }
