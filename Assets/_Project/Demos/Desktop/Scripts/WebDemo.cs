@@ -14,11 +14,13 @@ namespace CardboardXR.Demos.Desktop
         const string k_Home = "https://www.google.com";
         const string k_YouTube = "https://m.youtube.com";
         const string k_LastKey = "CardboardXR.WebLast";
+        // Page pixels per meter of hand travel while scrolling.
         const float k_PixelsPerMeter = 3000f;
-        // A little more logical page width gives responsive sites room for their tablet layout and
-        // keeps text and controls sharper when the floating screen is enlarged.
-        const int k_PageWidth = 1600;
-        const int k_PageHeight = 900;
+        // Page size kept intentionally modest; we render pages by drawing a hidden Android WebView
+        // into a bitmap, and sites with video surfaces can go black if they rely on hardware video
+        // layers. Large, flat pages are stable; video-heavy pages are rejected for a clear message.
+        const int k_PageWidth = 1280;
+        const int k_PageHeight = 720;
 
         CoreServices m_Core;
         FloatingScreen m_Screen;
@@ -26,6 +28,8 @@ namespace CardboardXR.Demos.Desktop
         TouchScreenKeyboard m_Keyboard;
         SurfaceKeyboard m_Keys;
         Vector2 m_Cursor = new(0.5f, 0.5f);
+        bool m_BlockVideoViewport;
+        string m_BlockMessage = "";
 
         public override void OnDemoEnter(CoreServices core)
         {
@@ -41,7 +45,7 @@ namespace CardboardXR.Demos.Desktop
             };
             m_Screen.AddButton("Back", () => m_Web.Back());
             m_Screen.AddButton("Google", () => m_Web.Load(k_Home));
-            m_Screen.AddButton("YouTube", () => m_Web.Load(k_YouTube));
+            m_Screen.AddButton("YouTube", () => Open(k_YouTube));
             m_Screen.AddButton("Reload", () => m_Web.Reload());
             m_Screen.AddButton("Keyboard", ToggleKeys);
             m_Screen.AddButton("Address", OpenKeyboard);
@@ -73,6 +77,18 @@ namespace CardboardXR.Demos.Desktop
         {
             if (m_Screen == null)
                 return;
+
+            if (m_BlockVideoViewport)
+            {
+                m_Screen.Interactive = false;
+                m_Screen.Show(null, 0f, m_BlockMessage);
+                m_Screen.Update(m_Core.Head, m_Core.HandTracker);
+                m_Keys.Update(m_Core.Head, m_Core.HandTracker);
+                if (!m_Keys.Visible)
+                    m_Screen.SetCursor(null);
+                return;
+            }
+
             m_Web.Update();
             m_Screen.Interactive = m_Web.HasFrame;
             m_Screen.Show(m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect,
@@ -105,6 +121,7 @@ namespace CardboardXR.Demos.Desktop
                     "Search or address");
         }
 
+        // An address opens; anything else goes into the field last tapped (a search box, say).
         void Submit(string text)
         {
             text = text.Trim();
@@ -120,8 +137,31 @@ namespace CardboardXR.Demos.Desktop
 
         void Open(string url)
         {
+            url = url?.Trim();
+            if (string.IsNullOrEmpty(url))
+                return;
+
+            if (IsVideoPage(url))
+            {
+                m_BlockVideoViewport = true;
+                m_BlockMessage = "Android WebView cannot render YouTube / video pages without a black frame. Use Computer Screen instead.";
+                m_Web.Load("about:blank");
+                PlayerPrefs.SetString(k_LastKey, url);
+                return;
+            }
+
+            m_BlockVideoViewport = false;
+            m_BlockMessage = "";
             PlayerPrefs.SetString(k_LastKey, url);
             m_Web.Load(url);
+        }
+
+        static bool IsVideoPage(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+            var lower = url.ToLowerInvariant();
+            return lower.Contains("youtube.com") || lower.Contains("youtu.be") || lower.Contains("vimeo.com") || lower.Contains("twitch.tv");
         }
 
         public bool TryBeginPinch(GameObject gazeTarget, PinchSource source) =>
