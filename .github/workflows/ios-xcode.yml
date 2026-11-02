@@ -9,10 +9,14 @@ name: iPhone build (from Windows export)
 
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: macOS runner label (Apple-chip runners are sometimes short on capacity)
+        default: macos-15-intel
 
 jobs:
   xcode-build:
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 90
     permissions:
       contents: write
