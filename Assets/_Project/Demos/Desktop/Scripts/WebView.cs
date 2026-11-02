@@ -20,6 +20,7 @@ namespace CardboardXR.Demos.Desktop
         [DllImport("__Internal")] static extern void GlassesWeb_Destroy();
         public static bool Supported => true;
 #elif UNITY_ANDROID && !UNITY_EDITOR
+        [DllImport("__Internal")] static extern void GlassesWeb_Tap(float x, float y);
         static AndroidJavaClass s_Bridge;
 
         static AndroidJavaClass Bridge
@@ -61,32 +62,35 @@ namespace CardboardXR.Demos.Desktop
         public static bool Supported => false;
 #endif
 
-        // Taps go to the element under the point: pointer and mouse events, then its click().
         const string k_Tap =
             "(function(x,y){var e=document.elementFromPoint(x,y);if(!e)return;" +
-            "var o={bubbles:true,cancelable:true,view:window,clientX:x,clientY:y};" +
-            "['pointerdown','mousedown','pointerup','mouseup'].forEach(function(t){try{e.dispatchEvent(" +
-            "t.indexOf('pointer')==0?new PointerEvent(t,o):new MouseEvent(t,o));}catch(_){}});" +
-            "if(e.focus)e.focus();e.click();})({0},{1})";
-
-        // Scrolls the nearest scrollable container under the point, or the page.
+            "if(e.focus)e.focus();var o={bubbles:true,cancelable:true,view:window,clientX:x,clientY:y};" +
+            "try{e.dispatchEvent(new PointerEvent('pointerdown',Object.assign({pointerId:1,pointerType:'touch'},o)));}catch(_){}" +
+            "e.dispatchEvent(new MouseEvent('mousedown',o));e.dispatchEvent(new MouseEvent('mouseup',o));e.click();})({0},{1})";
         const string k_Scroll =
             "(function(x,y,d){var e=document.elementFromPoint(x,y);while(e&&e!==document.body){" +
             "var s=getComputedStyle(e);if((s.overflowY=='auto'||s.overflowY=='scroll')&&e.scrollHeight>e.clientHeight)" +
             "{e.scrollBy(0,d);return;}e=e.parentElement;}window.scrollBy(0,d);})({0},{1},{2})";
-
-        // Types into the focused field and submits its form, as pressing Go would.
         const string k_Type =
-            "(function(t){var e=document.activeElement;if(!e||!('value' in e))return;e.value=t;" +
-            "e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));" +
-            "if(e.form){if(e.form.requestSubmit)e.form.requestSubmit();else e.form.submit();}})({0})";
-
-        // Typing into the focused field, as a real keyboard would.
-        const string k_Insert = "document.execCommand('insertText',false,{0})";
-        const string k_Delete = "document.execCommand('delete')";
+            "(function(t){var e=document.activeElement;if(!e)return;if('value' in e){" +
+            "var a=e.selectionStart==null?e.value.length:e.selectionStart,b=e.selectionEnd==null?a:e.selectionEnd;" +
+            "e.value=e.value.slice(0,a)+t+e.value.slice(b);e.setSelectionRange(a+t.length,a+t.length);}" +
+            "else if(e.isContentEditable)document.execCommand('insertText',false,t);" +
+            "e.dispatchEvent(new InputEvent('input',{bubbles:true,data:t,inputType:'insertText'}));})({0})";
+        const string k_Insert =
+            "(function(t){var e=document.activeElement;if(!e)return;if('value' in e){" +
+            "var a=e.selectionStart==null?e.value.length:e.selectionStart,b=e.selectionEnd==null?a:e.selectionEnd;" +
+            "e.value=e.value.slice(0,a)+t+e.value.slice(b);try{e.setSelectionRange(a+t.length,a+t.length);}catch(_){}}" +
+            "else if(e.isContentEditable)document.execCommand('insertText',false,t);" +
+            "e.dispatchEvent(new InputEvent('input',{bubbles:true,data:t,inputType:'insertText'}));})({0})";
+        const string k_Delete =
+            "(function(){var e=document.activeElement;if(!e)return;if('value' in e){" +
+            "var a=e.selectionStart==null?e.value.length:e.selectionStart,b=e.selectionEnd==null?a:e.selectionEnd;" +
+            "if(a===b&&a>0)a--;e.value=e.value.slice(0,a)+e.value.slice(b);try{e.setSelectionRange(a,a);}catch(_){}" +
+            "e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}));}" +
+            "else if(e.isContentEditable)document.execCommand('delete');})()";
         const string k_Enter =
-            "(function(){var e=document.activeElement;if(!e)return;var o={key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true};" +
-            "e.dispatchEvent(new KeyboardEvent('keydown',o));e.dispatchEvent(new KeyboardEvent('keyup',o));" +
+            "(function(){var e=document.activeElement;if(!e)return;" +
             "if(e.tagName=='TEXTAREA'||e.isContentEditable){document.execCommand('insertLineBreak');return;}" +
             "if(e.form){if(e.form.requestSubmit)e.form.requestSubmit();else e.form.submit();}})()";
 
@@ -119,33 +123,33 @@ namespace CardboardXR.Demos.Desktop
         public void Back() => GlassesWeb_Back();
         public void Reload() => GlassesWeb_Reload();
 
-        // Point in the picture: 0..1, y down.
-        public void Tap(Vector2 point) =>
+        // Screen coordinates are normalized with origin at the picture's top-left.
+        public void Tap(Vector2 point)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            GlassesWeb_Tap(Mathf.Clamp01(point.x) * m_Width, (1f - Mathf.Clamp01(point.y)) * m_Height);
+#else
             GlassesWeb_Eval(Fill(k_Tap, Number(point.x * m_Width), Number(point.y * m_Height)));
+#endif
+        }
 
         public void Scroll(Vector2 point, float pixels) =>
             GlassesWeb_Eval(Fill(k_Scroll, Number(point.x * m_Width), Number(point.y * m_Height), Number(pixels)));
 
-        public void Type(string text) =>
-            GlassesWeb_Eval(Fill(k_Type, Quote(text)));
-
+        public void Type(string text) => GlassesWeb_Eval(Fill(k_Type, Quote(text)));
         public void InsertText(string text) => GlassesWeb_Eval(Fill(k_Insert, Quote(text)));
         public void Backspace() => GlassesWeb_Eval(k_Delete);
         public void Enter() => GlassesWeb_Eval(k_Enter);
 
         static string Quote(string text) => "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-
-        // The scripts are full of braces, so placeholders are filled by plain replacement.
         static string Fill(string script, params string[] values)
         {
             for (var i = 0; i < values.Length; i++)
                 script = script.Replace("{" + i + "}", values[i]);
             return script;
         }
-
         static string Number(float value) => value.ToString("F1", CultureInfo.InvariantCulture);
 
-        // Copies a newer picture into Texture; true if there was one.
         public bool Update()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR

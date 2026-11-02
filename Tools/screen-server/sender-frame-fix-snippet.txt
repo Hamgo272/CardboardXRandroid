@@ -1,0 +1,12 @@
+  ctx.drawImage(preview, 0, 0, w, h);
+  busy = true;
+  canvas.toBlob(async (blob) => {
+    try {
+      await fetch('/push', { method: 'POST', body: blob, headers: {
+        'X-Width': String(w), 'X-Height': String(h),
+        'X-Kind': settings.displaySurface || 'monitor' } });
+      sent++;
+    } catch (e) { /* server restarting */ }
+    busy = false;
+  }, 'image/jpeg', 0.72);
+}
