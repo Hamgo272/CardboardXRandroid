@@ -111,28 +111,10 @@ namespace CardboardXR.Demos.Desktop
                 m_Keys.Show(m_Core.Head);
         }
 
-        // Prefer the installed native Google Maps app. If it isn't installed or cannot be
-        // launched, keep navigation available in the existing VR browser.
+        // Open Maps as a page in the existing captured WebView so it stays on the
+        // floating VR browser surface instead of switching to the phone's native app.
         void OpenGoogleMaps()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using (var bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge"))
-                {
-                    if (bridge.CallStatic<bool>("launchApp", "com.google.android.apps.maps"))
-                    {
-                        m_StatusMessage = "Opening Google Maps...";
-                        m_StatusUntil = Time.unscaledTime + 4f;
-                        return;
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[Browser] Native Google Maps launch failed: " + e.Message);
-            }
-#endif
             Open("https://www.google.com/maps");
         }
 
