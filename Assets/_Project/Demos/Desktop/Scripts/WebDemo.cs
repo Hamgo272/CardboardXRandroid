@@ -13,6 +13,7 @@ namespace CardboardXR.Demos.Desktop
 
         const string k_Home = "https://www.google.com";
         const string k_YouTube = "https://www.youtube.com";
+        const string k_Gemini = "https://gemini.google.com/app";
         const string k_LastKey = "CardboardXR.WebLast";
         const float k_PixelsPerMeter = 5000f;
         const int k_PageWidth = 1280;
@@ -44,6 +45,7 @@ namespace CardboardXR.Demos.Desktop
             m_Screen.AddButton("Back", () => m_Web.Back(), "chevron_left");
             m_Screen.AddButton("Home", () => Open(k_Home), "home");
             m_Screen.AddButton("YouTube", () => Open(k_YouTube), "movie");
+            m_Screen.AddButton("Gemini", () => Open(k_Gemini), "auto_awesome");
             m_Screen.AddButton("Reload", () => m_Web.Reload(), "refresh");
             m_Screen.AddButton("Keys", ToggleKeys, "touch_app");
             m_Screen.AddButton("Search", OpenKeyboard, "edit");
