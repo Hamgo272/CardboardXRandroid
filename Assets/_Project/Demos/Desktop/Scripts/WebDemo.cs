@@ -25,6 +25,8 @@ namespace CardboardXR.Demos.Desktop
         CoreServices m_Core;
         FloatingScreen m_Screen;
         WebView m_Web;
+        WebView m_MapsWeb;
+        FloatingScreen m_MapsScreen;
         TouchScreenKeyboard m_Keyboard;
         SurfaceKeyboard m_Keys;
         Vector2 m_Cursor = new(0.5f, 0.5f);
@@ -73,6 +75,7 @@ namespace CardboardXR.Demos.Desktop
         {
             if (ReferenceEquals(PinchRouter.Handler, this))
                 PinchRouter.Clear();
+            CloseGoogleMaps();
             m_Web?.Dispose();
             m_Web = null;
             m_Screen?.Destroy();
@@ -92,6 +95,14 @@ namespace CardboardXR.Demos.Desktop
             var status = showingStatus ? m_StatusMessage : "Loading...";
             m_Screen.Show(!showingStatus && m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect, status);
             m_Screen.Update(m_Core.Head, m_Core.HandTracker);
+            if (m_MapsWeb != null && m_MapsScreen != null)
+            {
+                m_MapsWeb.Update();
+                m_MapsScreen.Interactive = m_MapsWeb.HasFrame;
+                m_MapsScreen.Show(m_MapsWeb.HasFrame ? m_MapsWeb.Texture : null, m_MapsWeb.Aspect,
+                    m_MapsWeb.IsLoading ? "Loading Google Maps..." : "Google Maps is opening...");
+                m_MapsScreen.Update(m_Core.Head, m_Core.HandTracker);
+            }
             m_Keys.Update(m_Core.Head, m_Core.HandTracker);
             if (!m_Keys.Visible)
                 m_Screen.SetCursor(null);
@@ -112,28 +123,41 @@ namespace CardboardXR.Demos.Desktop
                 m_Keys.Show(m_Core.Head);
         }
 
-        // Launch Google Maps as its own Android app, separate from the VR browser.
+        // Maps is an independent VR app surface: its own Android WebView, frame stream,
+        // input bridge and FloatingScreen. Opening it never navigates or replaces the browser.
         void OpenGoogleMaps()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            try
+            if (m_MapsWeb != null)
+                return;
+
+            const int mapsWidth = 800;
+            const int mapsHeight = 450;
+            m_MapsWeb = new WebView(mapsWidth, mapsHeight,
+                "com.glassesxr.cardboardxr.GlassesMapsWebViewBridge");
+            m_MapsScreen = new FloatingScreen("Google Maps", m_Core.Boundary.transform, m_Material)
             {
-                using (var bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge"))
-                {
-                    if (bridge.CallStatic<bool>("launchApp", "com.google.android.apps.maps"))
-                        return;
-                }
-                m_StatusMessage = "Google Maps isn't installed. Open Apps to choose an installed app.";
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[Maps] Couldn't launch native Google Maps: " + e.Message);
-                m_StatusMessage = "Couldn't launch Google Maps. Check that it is installed.";
-            }
-            m_StatusUntil = Time.unscaledTime + 6f;
+                Tap = point => m_MapsWeb.Tap(point),
+                HoldUp = point => m_MapsWeb.Tap(point),
+                Scroll = (point, pixels) => m_MapsWeb.Scroll(point, pixels),
+            };
+            m_MapsScreen.AddButton("Back", () => m_MapsWeb?.Back(), "chevron_left");
+            m_MapsScreen.AddButton("Reload", () => m_MapsWeb?.Reload(), "refresh");
+            m_MapsScreen.AddButton("Close", CloseGoogleMaps, "close");
+            m_MapsScreen.PlaceInFront(m_Core.Head);
+            m_MapsScreen.Root.position += m_Core.Head.right * 1.05f;
+            m_MapsWeb.Load("https://www.google.com/maps/");
 #else
             Open("https://www.google.com/maps/");
 #endif
+        }
+
+        void CloseGoogleMaps()
+        {
+            m_MapsWeb?.Dispose();
+            m_MapsWeb = null;
+            m_MapsScreen?.Destroy();
+            m_MapsScreen = null;
         }
 
         void OpenKeyboard()
@@ -287,11 +311,13 @@ namespace CardboardXR.Demos.Desktop
 
         public bool TryBeginPinch(GameObject gazeTarget, PinchSource source) =>
             m_Screen != null && (m_Keys.TryBeginPinch(m_Core.Head) ||
+                (m_MapsScreen != null && m_MapsScreen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker)) ||
                 m_Screen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker));
 
         public void EndPinch()
         {
             m_Keys?.EndPinch();
+            m_MapsScreen?.EndPinch(m_Core.Head);
             m_Screen?.EndPinch(m_Core.Head);
         }
     }

@@ -20,7 +20,8 @@ namespace CardboardXR.Demos.Desktop
         const float k_MaxDistance = 10f;
         // A pinch becomes a scroll only after a deliberate vertical hand movement.
         const float k_ScrollStartDistance = 0.025f;
-        const float k_ScrollDeadZone = 0.0015f;
+        const float k_ScrollDeadZone = 0.0008f;
+        const float k_ScrollSmoothingSeconds = 0.035f;
         const float k_ScrollPixelsPerMeter = 3200f;
         const float k_HoldTime = 0.55f;
         const float k_PushGain = 3f;
@@ -87,6 +88,8 @@ namespace CardboardXR.Demos.Desktop
         float m_PinchStart;
         Vector3 m_HandStart;
         Vector3 m_LastHand;
+        Vector3 m_SmoothedScrollHand;
+        Vector3 m_LastScrollHand;
         Vector2 m_PinchPoint;
         float m_MoveDistance;
         Vector3 m_GrabOffset;
@@ -223,7 +226,7 @@ namespace CardboardXR.Demos.Desktop
                 if (Mathf.Abs(travel) >= k_ScrollStartDistance)
                 {
                     m_Drag = Drag.ScrollGesture;
-                    m_LastHand = HandPoint(hands);
+                    m_SmoothedScrollHand = m_LastScrollHand = HandPoint(hands);
                     Scroll?.Invoke(m_PinchPoint, travel * k_ScrollPixelsPerMeter);
                 }
             }
@@ -270,8 +273,10 @@ namespace CardboardXR.Demos.Desktop
                     if (m_Source == PinchSource.Hand && hands != null && hands.IsTracking)
                     {
                         var currentHand = HandPoint(hands);
-                        var delta = Vector3.Dot(currentHand - m_LastHand, m_Root.up);
-                        m_LastHand = currentHand;
+                        var smoothing = 1f - Mathf.Exp(-Time.unscaledDeltaTime / k_ScrollSmoothingSeconds);
+                        m_SmoothedScrollHand = Vector3.Lerp(m_SmoothedScrollHand, currentHand, smoothing);
+                        var delta = Vector3.Dot(m_SmoothedScrollHand - m_LastScrollHand, m_Root.up);
+                        m_LastScrollHand = m_SmoothedScrollHand;
                         if (Mathf.Abs(delta) >= k_ScrollDeadZone)
                             Scroll?.Invoke(m_PinchPoint, delta * k_ScrollPixelsPerMeter);
                     }

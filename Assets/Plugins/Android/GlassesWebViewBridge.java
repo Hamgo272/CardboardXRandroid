@@ -52,6 +52,11 @@ public final class GlassesWebViewBridge {
     private static int height;
     private static volatile boolean loading;
     private static final Object frameLock = new Object();
+    private static final Object scrollLock = new Object();
+    private static float pendingScrollX;
+    private static float pendingScrollY;
+    private static float pendingScrollDelta;
+    private static boolean scrollDispatchPosted;
     private static final int CAPTURE_INTERVAL_MS = 33;
 
     private GlassesWebViewBridge() { }
@@ -200,6 +205,47 @@ public final class GlassesWebViewBridge {
         } finally {
             if (image != null) image.close();
         }
+    }
+
+    /** Queues one scroll update on Android's UI thread without blocking Unity's render thread. */
+    public static void scroll(final float x, final float y, final float delta) {
+        Activity current = UnityPlayer.currentActivity;
+        if (current == null) return;
+
+        synchronized (scrollLock) {
+            pendingScrollX = x;
+            pendingScrollY = y;
+            pendingScrollDelta += delta;
+            if (scrollDispatchPosted) return;
+            scrollDispatchPosted = true;
+        }
+
+        current.runOnUiThread(() -> {
+            final float scrollX;
+            final float scrollY;
+            final float scrollDelta;
+            synchronized (scrollLock) {
+                scrollX = pendingScrollX;
+                scrollY = pendingScrollY;
+                scrollDelta = pendingScrollDelta;
+                pendingScrollDelta = 0f;
+                scrollDispatchPosted = false;
+            }
+            if (webView == null || Math.abs(scrollDelta) < 0.1f) return;
+
+            // Use one DOM scroll operation. The old code dispatched a synthetic wheel event
+            // and also called scrollBy, duplicating work and sometimes scrolling twice.
+            String script =
+                    "(function(x,y,d){var e=document.elementFromPoint(x,y),root=document.scrollingElement||document.documentElement;" +
+                    "while(e&&e!==document.documentElement){var s=getComputedStyle(e),o=s.overflowY;" +
+                    "if((o=='auto'||o=='scroll'||o=='overlay')&&e.scrollHeight>e.clientHeight+1){" +
+                    "var max=e.scrollHeight-e.clientHeight,next=Math.max(0,Math.min(max,e.scrollTop+d));" +
+                    "if(next!==e.scrollTop){e.scrollTop=next;return;}" +
+                    "if(s.overscrollBehaviorY=='contain'||s.overscrollBehaviorY=='none')return;}e=e.parentElement;}" +
+                    "root.scrollTop=Math.max(0,root.scrollTop+d);})(" +
+                    Float.toString(scrollX) + "," + Float.toString(scrollY) + "," + Float.toString(scrollDelta) + ")";
+            webView.evaluateJavascript(script, null);
+        });
     }
 
     /** Dispatch a touch in the same top-left coordinate space as the captured page. */

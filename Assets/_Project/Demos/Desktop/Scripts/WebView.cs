@@ -30,6 +30,7 @@ namespace CardboardXR.Demos.Desktop
         int GlassesWeb_Create(int width, int height) => m_AndroidBridge.CallStatic<int>("create", width, height);
         void GlassesWeb_Load(string url) => m_AndroidBridge.CallStatic("load", url);
         void GlassesWeb_Eval(string script) => m_AndroidBridge.CallStatic("evaluate", script);
+        void GlassesWeb_Scroll(float x, float y, float pixels) => m_AndroidBridge.CallStatic("scroll", x, y, pixels);
         void GlassesWeb_Tap(float x, float y) => m_AndroidBridge.CallStatic("tap", x, y);
         void GlassesWeb_Back() => m_AndroidBridge.CallStatic("back");
         void GlassesWeb_Reload() => m_AndroidBridge.CallStatic("reload");
@@ -68,11 +69,12 @@ namespace CardboardXR.Demos.Desktop
             "if(e.focus)e.focus();e.click();})({0},{1})";
         const string k_Scroll =
             "(function(x,y,d){var e=document.elementFromPoint(x,y),root=document.scrollingElement||document.documentElement;" +
-            "while(e&&e!==document.documentElement){var s=getComputedStyle(e),o=s.overflowY,t=e.scrollTop,m=e.scrollHeight-e.clientHeight;" +
-            "if((o=='auto'||o=='scroll'||o=='overlay')&&m>1){var can=d>0?t<m-1:t>1;" +
-            "if(can){try{e.dispatchEvent(new WheelEvent('wheel',{deltaY:d,bubbles:true,cancelable:true,clientX:x,clientY:y}));}catch(_){}" +
-            "e.scrollBy(0,d);return;}if(s.overscrollBehaviorY=='contain'||s.overscrollBehaviorY=='none')return;}e=e.parentElement;}" +
-            "root.scrollBy(0,d);})({0},{1},{2})";
+            "while(e&&e!==document.documentElement){var s=getComputedStyle(e),o=s.overflowY;" +
+            "if((o=='auto'||o=='scroll'||o=='overlay')&&e.scrollHeight>e.clientHeight+1){" +
+            "var max=e.scrollHeight-e.clientHeight,next=Math.max(0,Math.min(max,e.scrollTop+d));" +
+            "if(next!==e.scrollTop){e.scrollTop=next;return;}" +
+            "if(s.overscrollBehaviorY=='contain'||s.overscrollBehaviorY=='none')return;}e=e.parentElement;}" +
+            "root.scrollTop=Math.max(0,root.scrollTop+d);})({0},{1},{2})";
         const string k_Type =
             "(function(t){var e=document.activeElement;if(!e||!('value' in e))return;e.value=t;" +
             "e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));" +
@@ -195,7 +197,9 @@ namespace CardboardXR.Demos.Desktop
             var frame = GlassesWeb_CopyFrame();
             if (frame == null || frame.Length != m_Buffer.Length)
                 return false;
-            Buffer.BlockCopy(frame, 0, m_Buffer, 0, m_Buffer.Length);
+            // The JNI bridge already returns a managed copy. Upload it directly instead of
+            // copying the entire RGBA frame a second time every update.
+            Texture.LoadRawTextureData(frame);
             m_Frame++;
 #else
             var frame = GlassesWeb_CopyFrame(m_Buffer, m_Buffer.Length, m_Frame);
@@ -213,12 +217,16 @@ namespace CardboardXR.Demos.Desktop
             if (Mathf.Abs(m_PendingScroll) < 1f)
                 return;
             var now = Time.unscaledTime;
-            if (m_LastScrollSent >= 0f && now - m_LastScrollSent < 0.033f)
+            if (m_LastScrollSent >= 0f && now - m_LastScrollSent < 0.016f)
                 return;
             var pixels = Mathf.Clamp(m_PendingScroll, -320f, 320f);
             m_PendingScroll -= pixels;
             m_LastScrollSent = now;
+#if UNITY_ANDROID && !UNITY_EDITOR
+            GlassesWeb_Scroll(m_ScrollPoint.x * m_Width, m_ScrollPoint.y * m_Height, pixels);
+#else
             GlassesWeb_Eval(Fill(k_Scroll, Number(m_ScrollPoint.x * m_Width), Number(m_ScrollPoint.y * m_Height), Number(pixels)));
+#endif
         }
 
         public void Dispose()
