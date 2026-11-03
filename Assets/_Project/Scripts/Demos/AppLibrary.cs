@@ -168,13 +168,17 @@ namespace CardboardXR.Demos
             }
             for (var i = 0; i < nativeApps.Length; i++)
             {
-                var fields = nativeApps[i].Split(new[] { '\\t' }, 2);
+                var fields = nativeApps[i].Split(new[] { '\t' }, 2);
                 if (fields.Length != 2 || string.IsNullOrEmpty(fields[0]))
                     continue;
                 var packageName = fields[0];
                 var appTitle = fields[1];
                 Tile(demos.Count + 1 + i, size, null, appTitle, "Launch installed Android app", "apps",
-                    M3Theme.SecondaryContainer, () => LaunchNativeApp(packageName));
+                    M3Theme.SecondaryContainer, () =>
+                    {
+                        if (m_Settings != null) m_Settings.Close();
+                        LaunchNativeApp(packageName);
+                    });
             }
             m_Tagline.text = k_Prompt;
         }
