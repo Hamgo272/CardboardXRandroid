@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using CardboardXR.Hands;
 using CardboardXR.UI;
@@ -157,16 +158,65 @@ namespace CardboardXR.Demos
                 return;
             m_Built = true;
             var demos = m_Demos.Catalog.Demos;
-            var size = Size(demos.Count + 1);
-            Tile(0, size, null, m_LobbyTitle, m_LobbyTagline, m_LobbyIcon, m_LobbyTint);
+            var nativeApps = GetInstalledAndroidApps();
+            var size = Size(demos.Count + 1 + nativeApps.Length);
+            Tile(0, size, null, m_LobbyTitle, m_LobbyTagline, m_LobbyIcon, m_LobbyTint, () => Pick(null));
             for (var i = 0; i < demos.Count; i++)
-                Tile(i + 1, size, demos[i], demos[i].Title, demos[i].Tagline, demos[i].Icon, demos[i].Tint);
+            {
+                var entry = demos[i];
+                Tile(i + 1, size, entry, entry.Title, entry.Tagline, entry.Icon, entry.Tint, () => Pick(entry));
+            }
+            for (var i = 0; i < nativeApps.Length; i++)
+            {
+                var fields = nativeApps[i].Split(new[] { '\\t' }, 2);
+                if (fields.Length != 2 || string.IsNullOrEmpty(fields[0]))
+                    continue;
+                var packageName = fields[0];
+                var appTitle = fields[1];
+                Tile(demos.Count + 1 + i, size, null, appTitle, "Launch installed Android app", "apps",
+                    M3Theme.SecondaryContainer, () => LaunchNativeApp(packageName));
+            }
             m_Tagline.text = k_Prompt;
+        }
+
+        static string[] GetInstalledAndroidApps()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge"))
+                    return bridge.CallStatic<string[]>("getLaunchableApps") ?? Array.Empty<string>();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Apps] Could not enumerate installed Android apps: " + e.Message);
+            }
+#endif
+            return Array.Empty<string>();
+        }
+
+        static void LaunchNativeApp(string packageName)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge"))
+                {
+                    if (!bridge.CallStatic<bool>("launchApp", packageName))
+                        Debug.LogWarning("[Apps] Android could not launch " + packageName);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Apps] Launch failed for " + packageName + ": " + e.Message);
+            }
+#endif
         }
 
         // One app: an icon on a colored rounded square over its name, the whole cell the target, with
         // a state layer behind it for the gaze, and a dot under the name while it's running.
-        void Tile(int index, Vector2 size, DemoCatalog.Entry entry, string title, string tagline, string icon, Color tint)
+        void Tile(int index, Vector2 size, DemoCatalog.Entry entry, string title, string tagline, string icon, Color tint,
+            Action onPick)
         {
             var cell = M3.Group($"App {title}", m_Grid, CellPosition(index, size), new Vector2(k_CellWidth, k_CellHeight));
             var state = M3.Surface("State Layer", cell, Vector2.zero, cell.sizeDelta, Color.clear, M3Theme.k_ShapeLarge,
@@ -174,7 +224,7 @@ namespace CardboardXR.Demos
             var button = cell.gameObject.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
             button.targetGraphic = state;
-            button.onClick.AddListener(() => Pick(entry));
+            button.onClick.AddListener(() => onPick?.Invoke());
             cell.gameObject.AddComponent<M3StateLayer>().Initialize(state, button, M3Theme.OnSurface);
 
             var tile = M3.Surface("Icon Tile", cell, new Vector2(0f, 16f), new Vector2(k_IconSize, k_IconSize), tint, k_IconRadius);
@@ -185,7 +235,7 @@ namespace CardboardXR.Demos
                 .gameObject;
             running.SetActive(false);
             cell.gameObject.AddComponent<AppTileGaze>().Initialize(m_Tagline, string.IsNullOrEmpty(tagline) ? title : tagline, k_Prompt);
-            m_Tiles.Add((entry, running));
+            if (entry != null || title == m_LobbyTitle)\n                m_Tiles.Add((entry, running));
         }
     }
 }
