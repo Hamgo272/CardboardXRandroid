@@ -23,6 +23,7 @@ namespace CardboardXR.Demos.Desktop
         [DllImport("__Internal")] static extern void GlassesWeb_Destroy();
         static void GlassesWeb_StartVoiceSearch() { }
         static string GlassesWeb_ConsumeVoiceResult() => null;
+        static string GlassesWeb_GetLastError() => null;
         public static bool Supported => true;
 #elif UNITY_ANDROID && !UNITY_EDITOR
         readonly AndroidJavaClass m_AndroidBridge;
@@ -36,6 +37,7 @@ namespace CardboardXR.Demos.Desktop
         void GlassesWeb_Reload() => m_AndroidBridge.CallStatic("reload");
         void GlassesWeb_StartVoiceSearch() => m_AndroidBridge.CallStatic("startVoiceSearch");
         string GlassesWeb_ConsumeVoiceResult() => m_AndroidBridge.CallStatic<string>("consumeVoiceResult");
+        string GlassesWeb_GetLastError() => m_AndroidBridge.CallStatic<string>("getLastError");
         int GlassesWeb_IsLoading() => m_AndroidBridge.CallStatic<bool>("isLoading") ? 1 : 0;
         byte[] GlassesWeb_CopyFrame() => m_AndroidBridge.CallStatic<byte[]>("copyFrame");
         void GlassesWeb_Destroy()
@@ -104,6 +106,7 @@ namespace CardboardXR.Demos.Desktop
         public Texture2D Texture { get; }
         public bool HasFrame => m_Frame > 0;
         public bool IsLoading => GlassesWeb_IsLoading() != 0;
+        public string ErrorMessage => GlassesWeb_GetLastError();
         public float Aspect => (float)m_Height / m_Width;
         public bool HasMicrophonePermission
         {

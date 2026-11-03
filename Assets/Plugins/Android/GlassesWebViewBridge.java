@@ -51,6 +51,7 @@ public final class GlassesWebViewBridge {
     private static int width;
     private static int height;
     private static volatile boolean loading;
+    private static volatile String lastError;
     private static final Object frameLock = new Object();
     private static final Object scrollLock = new Object();
     private static float pendingScrollX;
@@ -84,6 +85,7 @@ public final class GlassesWebViewBridge {
             frameNumber = copiedFrameNumber = 0;
             latestRgba = null;
             loading = false;
+            lastError = null;
 
             imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
             DisplayManager displayManager = (DisplayManager) activity.getSystemService(Activity.DISPLAY_SERVICE);
@@ -116,11 +118,25 @@ public final class GlassesWebViewBridge {
             CookieManager.getInstance().setAcceptCookie(true);
             webView.setWebViewClient(new WebViewClient() {
                 // Do not hand YouTube/video URLs to another activity. Let WebView navigate in-app.
-                @Override public void onPageStarted(android.webkit.WebView view, String url, Bitmap icon) { loading = true; }
+                @Override public void onPageStarted(android.webkit.WebView view, String url, Bitmap icon) {
+                    loading = true;
+                    lastError = null;
+                }
                 @Override public void onPageFinished(android.webkit.WebView view, String url) { loading = false; }
                 @Override public void onReceivedError(android.webkit.WebView view, int code, String description, String failingUrl) {
-                    loading = false;
-                    android.util.Log.w("CardboardXR.Web", "Page load error: " + description);
+                    if (failingUrl != null && failingUrl.equals(view.getUrl())) {
+                        loading = false;
+                        lastError = code + " - " + description;
+                        android.util.Log.w("CardboardXR.Web", "Main page load error at " + failingUrl + ": " + lastError);
+                    }
+                }
+                @Override public void onReceivedHttpError(android.webkit.WebView view,
+                        android.webkit.WebResourceRequest request, android.webkit.WebResourceResponse response) {
+                    if (request.isForMainFrame()) {
+                        loading = false;
+                        lastError = "HTTP " + response.getStatusCode();
+                        android.util.Log.w("CardboardXR.Web", "Main page HTTP error: " + lastError);
+                    }
                 }
             });
             webView.setWebChromeClient(new WebChromeClient() {
@@ -369,7 +385,14 @@ public final class GlassesWebViewBridge {
     }
 
     public static void load(final String url) {
-        onUiThread(() -> { if (webView != null && url != null) webView.loadUrl(url); return null; }, null);
+        onUiThread(() -> {
+            if (webView != null && url != null) {
+                loading = true;
+                lastError = null;
+                webView.loadUrl(url);
+            }
+            return null;
+        }, null);
     }
     public static void evaluate(final String javascript) {
         onUiThread(() -> { if (webView != null && javascript != null) webView.evaluateJavascript(javascript, null); return null; }, null);
@@ -428,6 +451,7 @@ public final class GlassesWebViewBridge {
     public static void back() { onUiThread(() -> { if (webView != null && webView.canGoBack()) webView.goBack(); return null; }, null); }
     public static void reload() { onUiThread(() -> { if (webView != null) webView.reload(); return null; }, null); }
     public static boolean isLoading() { return loading; }
+    public static String getLastError() { return lastError; }
 
     public static byte[] copyFrame() {
         synchronized (frameLock) {

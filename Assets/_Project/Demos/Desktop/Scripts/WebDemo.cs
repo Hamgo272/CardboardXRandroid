@@ -98,9 +98,12 @@ namespace CardboardXR.Demos.Desktop
             if (m_MapsWeb != null && m_MapsScreen != null)
             {
                 m_MapsWeb.Update();
-                m_MapsScreen.Interactive = m_MapsWeb.HasFrame;
-                m_MapsScreen.Show(m_MapsWeb.HasFrame ? m_MapsWeb.Texture : null, m_MapsWeb.Aspect,
-                    m_MapsWeb.IsLoading ? "Loading Google Maps..." : "Google Maps is opening...");
+                var mapsError = m_MapsWeb.ErrorMessage;
+                var mapsReady = m_MapsWeb.HasFrame && string.IsNullOrEmpty(mapsError);
+                m_MapsScreen.Interactive = mapsReady;
+                var mapsStatus = m_MapsWeb.IsLoading ? "Loading Google Maps..." :
+                    !string.IsNullOrEmpty(mapsError) ? "Maps couldn't load: " + mapsError : "Opening Google Maps...";
+                m_MapsScreen.Show(mapsReady ? m_MapsWeb.Texture : null, m_MapsWeb.Aspect, mapsStatus);
                 m_MapsScreen.Update(m_Core.Head, m_Core.HandTracker);
             }
             m_Keys.Update(m_Core.Head, m_Core.HandTracker);
