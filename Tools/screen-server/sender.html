@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Glasses — שיתוף מסך</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CardboardXR — Screen sharing</title>
 <style>
-  body { font-family: system-ui, sans-serif; background: #111; color: #eee; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; max-width: 720px; margin: 40px auto; padding: 0 16px; }
   h1 { font-size: 26px; }
   button { font: inherit; font-size: 20px; padding: 12px 28px; border: 0; border-radius: 12px; background: #2a6df4; color: #fff; cursor: pointer; }
   button.stop { background: #b33; }
@@ -17,19 +18,19 @@
 </style>
 </head>
 <body>
-<h1>שיתוף המסך למשקפיים</h1>
+<h1>Share your computer screen with CardboardXR</h1>
 <div class="card">
-  1. לחץ <b>שתף</b> ובחר <b>את כל המסך</b> (לא חלון), כדי שהלחיצות מהמשקפיים ינחתו במקום הנכון.<br>
-  2. באייפון, פתח את האפליקציה ובחר <b>Computer Screen</b>. הטלפון מוצא את המחשב לבד, כשהם על אותה רשת Wi‑Fi.
-     בפעם הראשונה יופיע כאן כפתור <b>אשר</b>: רק מכשיר שאישרת יכול לראות את המסך ולשלוט בעכבר.<br>
-  3. השאר את הדף הזה פתוח (אפשר להקטין אותו). הסאונד ממשיך לצאת מהמחשב.
+  1. Press <b>Share screen</b> and choose <b>Entire screen</b> (not a window) so clicks from the headset map correctly.<br>
+  2. Open <b>Computer Screen</b> in CardboardXR on your phone. The phone can find this computer automatically when both are on the same Wi-Fi network.<br>
+  3. The first time, approve the phone below. Only approved devices can view the screen or control the mouse.<br>
+  4. Keep this page open while sharing. Computer audio continues to play from the computer.
 </div>
 <div class="row">
-  <button id="go">שתף</button>
-  <label>איכות <select id="width"><option value="1280">720p (מומלץ)</option><option value="1920">1080p</option><option value="960">540p (רשת חלשה)</option></select></label>
-  <label>פריימים <select id="fps"><option>24</option><option>30</option><option>15</option></select></label>
+  <button id="go">Share screen</button>
+  <label>Quality <select id="width"><option value="1280">720p (recommended)</option><option value="1920">1080p</option><option value="960">540p (weak network)</option></select></label>
+  <label>Frame rate <select id="fps"><option>24</option><option>30</option><option>15</option></select></label>
 </div>
-<div class="card" id="status">ממתין לשיתוף…</div>
+<div class="card" id="status">Waiting for screen sharing…</div>
 <div class="card" id="pending" hidden></div>
 <video id="preview" muted playsinline></video>
 <script>
@@ -44,11 +45,11 @@ go.onclick = async () => {
   if (stream) return stop();
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
-  } catch (e) { statusEl.textContent = 'השיתוף בוטל.'; return; }
+  } catch (e) { statusEl.textContent = 'Screen sharing was cancelled.'; return; }
   preview.srcObject = stream;
   await preview.play();
   stream.getVideoTracks()[0].onended = stop;
-  go.textContent = 'עצור'; go.className = 'stop';
+  go.textContent = 'Stop sharing'; go.className = 'stop';
   schedule();
 };
 
@@ -62,10 +63,10 @@ function stop() {
   clearInterval(timer); timer = null;
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = null; preview.srcObject = null;
-  go.textContent = 'שתף'; go.className = '';
+  go.textContent = 'Share screen'; go.className = '';
 }
 
-// One frame in flight at a time: a slow network lowers the frame rate instead of piling up.
+// Keep one frame in flight: a slow network lowers the frame rate instead of piling up requests.
 function tick() {
   if (!stream || busy || !preview.videoWidth) return;
   const settings = stream.getVideoTracks()[0].getSettings();
@@ -76,8 +77,9 @@ function tick() {
   busy = true;
   canvas.toBlob(async (blob) => {
     try {
+      if (!blob) throw new Error('Could not encode the screen frame');
       await fetch('/push', { method: 'POST', body: blob, headers: {
-        'X-Width': String(preview.videoWidth), 'X-Height': String(preview.videoHeight),
+        'X-Width': String(w), 'X-Height': String(h),
         'X-Kind': settings.displaySurface || 'monitor' } });
       sent++;
     } catch (e) { /* server restarting */ }
@@ -88,16 +90,16 @@ function tick() {
 setInterval(async () => {
   try {
     const s = await (await fetch('/status')).json();
-    const fps = (sent - lastSent); lastSent = sent;
+    const fps = sent - lastSent; lastSent = sent;
     statusEl.innerHTML =
-      (stream ? `<span class="ok">● משתף</span> · ${fps} פריימים בשנייה` : '<span class="wait">● לא משתף</span>') + '<br>' +
-      (s.phone ? '<span class="ok">● האייפון מחובר</span>' : '<span class="wait">● מחכה לאייפון…</span>') + '<br>' +
-      'כתובת המחשב (אם צריך להקליד ידנית): ' + s.addresses.map(a => `<code>${a}</code>`).join(' , ');
+      (stream ? `<span class="ok">● Sharing</span> · ${fps} frames per second` : '<span class="wait">● Not sharing</span>') + '<br>' +
+      (s.phone ? '<span class="ok">● Phone connected</span>' : '<span class="wait">● Waiting for phone…</span>') + '<br>' +
+      'Computer address (enter manually in the app if needed): ' + s.addresses.map(a => `<code>${a}</code>`).join(' , ');
     const pendingEl = document.getElementById('pending');
     pendingEl.hidden = s.pending.length === 0;
     pendingEl.innerHTML = s.pending.map(a =>
-      `מכשיר <code>${a}</code> מבקש לראות את המסך ולשלוט בעכבר. <button onclick="approve('${a}')">אשר</button>`).join('<br>');
-  } catch (e) { statusEl.textContent = 'השרת לא פועל. הפעל את start.bat.'; }
+      `Device <code>${a}</code> is requesting screen and mouse access. <button onclick="approve('${a}')">Approve</button>`).join('<br>');
+  } catch (e) { statusEl.textContent = 'Server is not running. Start it with start-linux.sh or start.bat.'; }
 }, 1000);
 async function approve(address) { await fetch('/approve', { method: 'POST', body: address }); }
 </script>

@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebViewClient;
 
@@ -85,6 +86,24 @@ public final class GlassesWebViewBridge {
             settings.setDisplayZoomControls(false);
             CookieManager.getInstance().setAcceptCookie(true);
             webView.setWebViewClient(new WebViewClient() {
+                private boolean intercept(String url) {
+                    if (isVideoUrl(url)) {
+                        if (!openExternalOnUiThread(url))
+                            android.util.Log.w("CardboardXR.Web", "No external activity available for video URL: " + url);
+                        return true;
+                    }
+                    return false;
+                }
+
+                @Override public boolean shouldOverrideUrlLoading(android.webkit.WebView view, String url) {
+                    return intercept(url);
+                }
+
+                @Override public boolean shouldOverrideUrlLoading(android.webkit.WebView view, WebResourceRequest request) {
+                    if (request == null || !request.isForMainFrame()) return false;
+                    return intercept(request.getUrl().toString());
+                }
+
                 @Override public void onPageStarted(android.webkit.WebView view, String url, Bitmap icon) { loading = true; }
                 @Override public void onPageFinished(android.webkit.WebView view, String url) { loading = false; }
                 @Override public void onReceivedError(android.webkit.WebView view, int code, String description, String failingUrl) {
@@ -110,6 +129,53 @@ public final class GlassesWebViewBridge {
             android.util.Log.i("CardboardXR.Web", "Android WebView created " + width + "x" + height);
             return 1;
         }, 0);
+    }
+
+    private static boolean isVideoUrl(String value) {
+        if (value == null) return false;
+        Uri uri = Uri.parse(value);
+        String host = uri.getHost();
+        if (host == null) return false;
+        host = host.toLowerCase(java.util.Locale.ROOT);
+        return host.equals("youtube.com") || host.endsWith(".youtube.com") ||
+                host.equals("youtu.be") || host.endsWith(".youtu.be") ||
+                host.equals("vimeo.com") || host.endsWith(".vimeo.com") ||
+                host.equals("twitch.tv") || host.endsWith(".twitch.tv");
+    }
+
+    private static boolean openExternalOnUiThread(String url) {
+        if (activity == null || url == null) return false;
+        try {
+            Uri uri = Uri.parse(url);
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            String host = uri.getHost();
+            boolean youtube = host != null && (host.equalsIgnoreCase("youtube.com") ||
+                    host.toLowerCase(java.util.Locale.ROOT).endsWith(".youtube.com") ||
+                    host.equalsIgnoreCase("youtu.be") || host.toLowerCase(java.util.Locale.ROOT).endsWith(".youtu.be"));
+            if (youtube) {
+                intent.setPackage("com.google.android.youtube");
+                try {
+                    activity.startActivity(intent);
+                    android.util.Log.i("CardboardXR.Web", "Opened URL in YouTube: " + url);
+                    return true;
+                } catch (ActivityNotFoundException | SecurityException unavailable) {
+                    // No YouTube package or the app cannot resolve this URL; fall back to a browser.
+                    intent.setPackage(null);
+                }
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+            android.util.Log.i("CardboardXR.Web", "Opened video externally: " + url);
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            android.util.Log.w("CardboardXR.Web", "No app can open URL: " + url, e);
+            return false;
+        }
+    }
+
+    /** Launch a video URL in its dedicated app when installed; otherwise use the system browser. */
+    public static boolean openExternal(final String url) {
+        return onUiThread(() -> openExternalOnUiThread(url), false);
     }
 
     private static void captureOnUiThread() {
@@ -140,37 +206,6 @@ public final class GlassesWebViewBridge {
         } catch (RuntimeException e) {
             android.util.Log.w("CardboardXR.Web", "Could not capture WebView frame", e);
         }
-    }
-
-    /** Launch a video URL in its dedicated app when installed; otherwise use the system browser. */
-    public static boolean openExternal(final String url) {
-        return onUiThread(() -> {
-            if (activity == null || url == null || !(url.startsWith("https://") || url.startsWith("http://")))
-                return false;
-            try {
-                Uri uri = Uri.parse(url);
-                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-                String host = uri.getHost();
-                if (host != null && (host.equalsIgnoreCase("youtube.com") || host.endsWith(".youtube.com") ||
-                        host.equalsIgnoreCase("youtu.be") || host.equalsIgnoreCase("www.youtu.be"))) {
-                    intent.setPackage("com.google.android.youtube");
-                    PackageManager pm = activity.getPackageManager();
-                    if (intent.resolveActivity(pm) == null) {
-                        intent.setPackage(null);
-                        if (intent.resolveActivity(pm) == null) return false;
-                    }
-                } else if (intent.resolveActivity(activity.getPackageManager()) == null) {
-                    return false;
-                }
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                activity.startActivity(intent);
-                android.util.Log.i("CardboardXR.Web", "Opened video externally: " + url);
-                return true;
-            } catch (ActivityNotFoundException | SecurityException e) {
-                android.util.Log.w("CardboardXR.Web", "No app can open URL: " + url, e);
-                return false;
-            }
-        }, false);
     }
 
     /** Dispatch a touch in the same top-left coordinate space as the captured page. */

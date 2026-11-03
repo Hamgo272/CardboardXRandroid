@@ -3,8 +3,8 @@ using UnityEngine;
 
 namespace CardboardXR.Demos.Desktop
 {
-    // Browser pages are drawn into a texture. Android's WebView cannot capture video layers, so video
-    // URLs are handed to a native app instead of showing a permanently black player rectangle.
+    // Browser pages are drawn into a texture. Android WebView cannot capture video layers, so video
+    // URLs are handed to an installed native app/browser rather than showing a black player rectangle.
     public class WebDemo : Demo, IPinchHandler
     {
         [Tooltip("Unlit material the screen's parts are made from.")]
@@ -129,7 +129,6 @@ namespace CardboardXR.Demos.Desktop
                 m_StatusUntil = Time.unscaledTime + 12f;
                 return;
             }
-
             PlayerPrefs.SetString(k_LastKey, url);
             m_Web.Load(url);
             if (IsVideoPage(url))
