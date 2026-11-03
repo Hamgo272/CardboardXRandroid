@@ -25,6 +25,8 @@ namespace CardboardXR.Demos.Desktop
         CoreServices m_Core;
         FloatingScreen m_Screen;
         WebView m_Web;
+        WebView m_MapsWeb;
+        FloatingScreen m_MapsScreen;
         TouchScreenKeyboard m_Keyboard;
         SurfaceKeyboard m_Keys;
         Vector2 m_Cursor = new(0.5f, 0.5f);
@@ -73,6 +75,7 @@ namespace CardboardXR.Demos.Desktop
         {
             if (ReferenceEquals(PinchRouter.Handler, this))
                 PinchRouter.Clear();
+            CloseGoogleMaps();
             m_Web?.Dispose();
             m_Web = null;
             m_Screen?.Destroy();
@@ -91,6 +94,14 @@ namespace CardboardXR.Demos.Desktop
             var status = Time.unscaledTime < m_StatusUntil ? m_StatusMessage : "Loading...";
             m_Screen.Show(m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect, status);
             m_Screen.Update(m_Core.Head, m_Core.HandTracker);
+            if (m_MapsWeb != null && m_MapsScreen != null)
+            {
+                m_MapsWeb.Update();
+                m_MapsScreen.Interactive = m_MapsWeb.HasFrame;
+                m_MapsScreen.Show(m_MapsWeb.HasFrame ? m_MapsWeb.Texture : null, m_MapsWeb.Aspect,
+                    m_MapsWeb.IsLoading ? "Loading Google Maps..." : "Google Maps unavailable");
+                m_MapsScreen.Update(m_Core.Head, m_Core.HandTracker);
+            }
             m_Keys.Update(m_Core.Head, m_Core.HandTracker);
             if (!m_Keys.Visible)
                 m_Screen.SetCursor(null);
@@ -111,11 +122,38 @@ namespace CardboardXR.Demos.Desktop
                 m_Keys.Show(m_Core.Head);
         }
 
-        // Open Maps as a page in the existing captured WebView so it stays on the
-        // floating VR browser surface instead of switching to the phone's native app.
+        // Maps owns a second native WebView + floating screen. It stays independent of
+        // the normal browser, so both windows can remain open at the same time.
         void OpenGoogleMaps()
         {
-            Open("https://www.google.com/maps");
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (m_MapsWeb != null)
+                return;
+            m_MapsWeb = new WebView(k_PageWidth, k_PageHeight,
+                "com.glassesxr.cardboardxr.GlassesMapsWebViewBridge");
+            m_MapsScreen = new FloatingScreen("Google Maps", m_Core.Boundary.transform, m_Material)
+            {
+                Tap = p => m_MapsWeb.Tap(p),
+                HoldUp = p => m_MapsWeb.Tap(p),
+                Scroll = (p, meters) => m_MapsWeb.Scroll(p, meters * k_PixelsPerMeter),
+            };
+            m_MapsScreen.AddButton("Back", () => m_MapsWeb.Back(), "chevron_left");
+            m_MapsScreen.AddButton("Reload", () => m_MapsWeb.Reload(), "refresh");
+            m_MapsScreen.AddButton("Close", CloseGoogleMaps, "close");
+            m_MapsScreen.PlaceInFront(m_Core.Head);
+            m_MapsScreen.Root.position += m_Core.Head.right * 1.35f;
+            m_MapsWeb.Load("https://maps.google.com/");
+#else
+            Open("https://maps.google.com/");
+#endif
+        }
+
+        void CloseGoogleMaps()
+        {
+            m_MapsWeb?.Dispose();
+            m_MapsWeb = null;
+            m_MapsScreen?.Destroy();
+            m_MapsScreen = null;
         }
 
         void OpenKeyboard()
