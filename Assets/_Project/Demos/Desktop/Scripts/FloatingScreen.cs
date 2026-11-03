@@ -67,6 +67,7 @@ namespace CardboardXR.Demos.Desktop
             Hold,
             Move,
             Resize,
+            ScrollGesture,
         }
 
         readonly Material m_Template;
@@ -265,7 +266,7 @@ namespace CardboardXR.Demos.Desktop
         // then move vertically over the page. Thumb position is ignored, so it cannot resemble pinch.
         void UpdateTwoFingerScroll(HandTracker hands)
         {
-            if (m_Drag != Drag.None || hands == null || !hands.isActiveAndEnabled ||
+            if ((m_Drag != Drag.None && m_Drag != Drag.ScrollGesture) || hands == null || !hands.isActiveAndEnabled ||
                 !hands.IsTracking || !IsTwoFingerScroll(hands.Joints))
             {
                 m_TwoFingerScrollActive = false;
@@ -319,10 +320,14 @@ namespace CardboardXR.Demos.Desktop
 
         public bool TryBeginPinch(Transform head, PinchSource source, HandTracker hands)
         {
-            // The two-finger scroll pose must never enter the pinch/click path.
-            // Check it here as well as during Update so the router cannot start a tap first.
+            // Claim the pinch while the scroll pose is active. Returning false would let
+            // PinchRouter fall through to a normal gaze click, which is the click/scroll conflict.
             if (source == PinchSource.Hand && hands != null && IsTwoFingerScroll(hands.Joints))
-                return false;
+            {
+                m_Source = source;
+                m_Drag = Drag.ScrollGesture;
+                return true;
+            }
 
             var local = Hit(new Ray(head.position, head.forward));
             if (!local.HasValue)
@@ -378,6 +383,9 @@ namespace CardboardXR.Demos.Desktop
                 case Drag.Move:
                 case Drag.Resize:
                     Debug.Log($"[Screen] {m_Root.name}: {m_Width:F2} m wide, {Vector3.Distance(head.position, m_Root.position):F2} m away");
+                    break;
+                case Drag.ScrollGesture:
+                    // This pinch was claimed only to prevent PinchRouter's gaze-click fallback.
                     break;
             }
             m_Drag = Drag.None;
