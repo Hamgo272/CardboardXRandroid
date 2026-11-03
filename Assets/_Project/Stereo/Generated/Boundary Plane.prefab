@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &8624757857807230410
+--- !u!1 &9064629071715491175
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,14 +8,14 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 3326433628323095259}
-  - component: {fileID: 4326979270082708294}
-  - component: {fileID: 7486488573454788076}
-  - component: {fileID: 1997980206806591531}
-  - component: {fileID: 4868954790738835790}
-  - component: {fileID: 1160823703829419930}
-  - component: {fileID: 8241074485273578584}
-  - component: {fileID: 4481313152800011530}
+  - component: {fileID: 8436232573052368548}
+  - component: {fileID: 7119282481880010857}
+  - component: {fileID: 8449502930678631103}
+  - component: {fileID: 7196016283553901413}
+  - component: {fileID: 7772011911282391377}
+  - component: {fileID: 4780485955652864650}
+  - component: {fileID: 4494115941490255304}
+  - component: {fileID: 3517078293285935643}
   m_Layer: 30
   m_Name: Boundary Plane
   m_TagString: Untagged
@@ -23,13 +23,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &3326433628323095259
+--- !u!4 &8436232573052368548
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -38,13 +38,13 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &4326979270082708294
+--- !u!114 &7119282481880010857
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f66da7470dce8f4d821d71dd2b1d4ac, type: 3}
@@ -52,21 +52,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARPlane
   m_DestroyOnRemoval: 1
   m_VertexChangedThreshold: 0.01
---- !u!33 &7486488573454788076
+--- !u!33 &8449502930678631103
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   m_Mesh: {fileID: 0}
---- !u!23 &1997980206806591531
+--- !u!23 &7196016283553901413
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   m_Enabled: 1
   m_CastShadows: 0
   m_ReceiveShadows: 0
@@ -110,26 +110,26 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!114 &4868954790738835790
+--- !u!114 &7772011911282391377
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7cdc16622b450490d8bdde8f3104675d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CardboardXR.Stereo::CardboardXR.Stereo.SurfaceMesh
   m_Feather: 0.15
---- !u!65 &1160823703829419930
+--- !u!65 &4780485955652864650
 BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -144,26 +144,26 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &8241074485273578584
+--- !u!114 &4494115941490255304
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5c4c7dad3acd449eaa451d7883607fbd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CardboardXR.Stereo::CardboardXR.Stereo.PlaneCollider
   m_MinArea: 0.2
---- !u!114 &4481313152800011530
+--- !u!114 &3517078293285935643
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8624757857807230410}
+  m_GameObject: {fileID: 9064629071715491175}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b3588dfbea90e4efd8b16ce17dd06431, type: 3}

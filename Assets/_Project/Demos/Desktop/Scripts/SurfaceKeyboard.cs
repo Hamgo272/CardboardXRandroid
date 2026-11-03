@@ -29,7 +29,7 @@ namespace CardboardXR.Demos.Desktop
         const float k_TapRise = 0.006f;
         const float k_TapWindow = 0.25f;
         // Fingertip travel over the pad, in meters, that crosses the whole screen.
-        const float k_PadSpan = 0.1f;
+        const float k_PadSpan = 0.28f;
 
         static readonly Color k_KeyColor = new(0.16f, 0.16f, 0.2f);
         static readonly Color k_KeyHot = new(0.3f, 0.75f, 1f);
@@ -102,11 +102,11 @@ namespace CardboardXR.Demos.Desktop
                 }
                 y -= k_Key;
             }
-            // Bottom row: shift, space, backspace, enter, hide.
-            AddKey("shift", -4.0f * k_Key, y, 1.8f);
-            AddKey("space", -0.6f * k_Key, y, 4.6f);
-            AddKey("back", 2.8f * k_Key, y, 1.8f);
-            AddKey("enter", 4.6f * k_Key, y, 1.6f);
+            // Bottom row: each key has a visible gap and an independent hit target.
+            AddKey("shift", -4.5f * k_Key, y, 1.8f);
+            AddKey("space", -2.6f * k_Key, y, 4.4f);
+            AddKey("back", 1.9f * k_Key, y, 1.8f);
+            AddKey("enter", 3.8f * k_Key, y, 1.8f);
             AddKey("hide", -4.0f * k_Key, k_Key, 1.8f);
 
             m_Pad = Quad("Touchpad", k_PadColor, out m_PadMaterial);

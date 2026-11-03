@@ -396,8 +396,10 @@ namespace CardboardXR.Demos.Desktop
                 button.Label.transform.localScale = textScale;
                 button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.05f);
                 button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.035f);
-                button.Icon.fontSize = 0.044f;
-                button.Label.fontSize = 0.024f;
+                // The label and icon are inversely scaled with their button. TMP's font size is
+                // therefore in the button's unscaled space, not meters.
+                button.Icon.fontSize = 0.48f;
+                button.Label.fontSize = 0.24f;
                 button.Icon.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Label.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Icon.overflowMode = TextOverflowModes.Overflow;
