@@ -22,10 +22,10 @@ namespace CardboardXR.Demos.Desktop
         const float k_MaxDistance = 10f;
         // Hand travel, in meters, that turns a pinch on the picture into scrolling.
         const float k_ScrollStart = 0.01f;
-        // Open-palm scrolling is a separate gesture from pinch-to-scroll and pinch-to-drag.
-        const float k_PalmScrollReach = 0.22f;
-        const float k_PalmScrollStart = 0.006f;
-        const float k_OpenPalmDistance = 0.075f;
+        // Pointing with the index finger (other fingers curled) scrolls. This is deliberately
+        // unlike the open, camera-facing palm used to summon Settings.
+        const float k_PointScrollReach = 0.22f;
+        const float k_PointScrollStart = 0.004f;
         // A pinch held this long without scrolling becomes a drag.
         const float k_HoldTime = 0.35f;
         // Moving the pinched hand forward by 1 m pushes the screen this many meters away.
@@ -271,22 +271,22 @@ namespace CardboardXR.Demos.Desktop
             }
         }
 
-        // A relaxed, open palm is a dedicated scroll gesture: hold it over the page and move
-        // vertically. This does not require pinching, and it is ignored while another screen
-        // interaction owns the hand.
+        // Point-and-scroll: extend the index finger, curl the other three fingers, then
+        // move the fingertip vertically over the browser. An open palm never activates this,
+        // keeping it distinct from SettingsSummoner's palm-facing gesture.
         void UpdatePalmScroll(Transform head, HandTracker hands)
         {
             if (m_Drag != Drag.None || hands == null || !hands.isActiveAndEnabled || !hands.IsTracking ||
-                hands.PinchDistance < k_OpenPalmDistance)
+                !IsPointingGesture(hands.Joints))
             {
                 m_PalmScrollActive = false;
                 return;
             }
 
-            var wrist = hands.Joints[0];
-            var local = m_Root.InverseTransformPoint(wrist);
+            var fingertip = hands.Joints[HandGeometry.IndexTip];
+            var local = m_Root.InverseTransformPoint(fingertip);
             var height = m_Width * m_Aspect;
-            var overPage = Mathf.Abs(local.z) <= k_PalmScrollReach &&
+            var overPage = Mathf.Abs(local.z) <= k_PointScrollReach &&
                            Mathf.Abs(local.x) <= m_Width * 0.5f &&
                            Mathf.Abs(local.y) <= height * 0.5f;
             if (!overPage)
@@ -304,10 +304,23 @@ namespace CardboardXR.Demos.Desktop
 
             var delta = local.y - m_LastPalmScrollPoint.y;
             m_LastPalmScrollPoint = local;
-            if (Mathf.Abs(delta) < k_PalmScrollStart)
+            if (Mathf.Abs(delta) < k_PointScrollStart)
                 return;
             var point = new Vector2(local.x / m_Width + 0.5f, 0.5f - local.y / height);
             Scroll?.Invoke(point, delta);
+        }
+
+        static bool IsPointingGesture(Vector3[] joints)
+        {
+            if (joints == null || joints.Length < HandGeometry.JointCount)
+                return false;
+            var wrist = joints[0];
+            bool Extended(int tip, int pip) =>
+                Vector3.Distance(joints[tip], wrist) > Vector3.Distance(joints[pip], wrist) * 1.12f;
+            bool Curled(int tip, int pip) =>
+                Vector3.Distance(joints[tip], wrist) < Vector3.Distance(joints[pip], wrist) * 1.08f;
+            return Extended(HandGeometry.IndexTip, 6) &&
+                   Curled(12, 10) && Curled(16, 14) && Curled(20, 18);
         }
 
         // ---------- pinches ----------
