@@ -56,6 +56,7 @@ namespace CardboardXR.Demos.Desktop
         static void GlassesWeb_Reload() { }
         static void GlassesWeb_StartVoiceSearch() { }
         static string GlassesWeb_ConsumeVoiceResult() => null;
+        static string GlassesWeb_GetLastError() => null;
         static int GlassesWeb_IsLoading() => 0;
         static int GlassesWeb_CopyFrame(byte[] buffer, int length, int lastFrame) => -1;
         static byte[] GlassesWeb_CopyFrame() => null;
