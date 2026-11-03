@@ -25,8 +25,6 @@ namespace CardboardXR.Demos.Desktop
         CoreServices m_Core;
         FloatingScreen m_Screen;
         WebView m_Web;
-        WebView m_MapsWeb;
-        FloatingScreen m_MapsScreen;
         TouchScreenKeyboard m_Keyboard;
         SurfaceKeyboard m_Keys;
         Vector2 m_Cursor = new(0.5f, 0.5f);
@@ -52,12 +50,12 @@ namespace CardboardXR.Demos.Desktop
             m_Screen.AddButton("Maps", OpenGoogleMaps, "map");
             m_Screen.AddButton("YouTube", () => Open(k_YouTube), "movie");
             m_Screen.AddButton("Gemini", () => Open(k_Gemini), "auto_awesome");
-            m_Screen.AddButton("Visual Search", StartVisualSearch, "image_search");
+            m_Screen.AddButton("Lens", StartVisualSearch, "image_search");
             m_Screen.AddButton("Reload", () => m_Web.Reload(), "refresh");
             m_Screen.AddButton("Keys", ToggleKeys, "touch_app");
-            m_Screen.AddButton("Search", OpenKeyboard, "edit");
+            m_Screen.AddButton("Find", OpenKeyboard, "edit");
             m_Screen.AddButton("Voice", StartVoiceSearch, "front_hand");
-            m_Screen.AddButton("Full Video", () => m_Web.ToggleVideoFullscreen(), "aspect_ratio");
+            m_Screen.AddButton("Video", () => m_Web.ToggleVideoFullscreen(), "aspect_ratio");
             m_Keys = new SurfaceKeyboard(core.Boundary.transform, m_Material)
             {
                 Text = t => m_Web.InsertText(t),
@@ -75,7 +73,6 @@ namespace CardboardXR.Demos.Desktop
         {
             if (ReferenceEquals(PinchRouter.Handler, this))
                 PinchRouter.Clear();
-            CloseGoogleMaps();
             m_Web?.Dispose();
             m_Web = null;
             m_Screen?.Destroy();
@@ -90,18 +87,11 @@ namespace CardboardXR.Demos.Desktop
                 return;
             m_Web.Update();
             UpdateVoiceSearch();
-            m_Screen.Interactive = m_Web.HasFrame;
-            var status = Time.unscaledTime < m_StatusUntil ? m_StatusMessage : "Loading...";
-            m_Screen.Show(m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect, status);
+            var showingStatus = Time.unscaledTime < m_StatusUntil && !string.IsNullOrEmpty(m_StatusMessage);
+            m_Screen.Interactive = m_Web.HasFrame && !showingStatus;
+            var status = showingStatus ? m_StatusMessage : "Loading...";
+            m_Screen.Show(!showingStatus && m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect, status);
             m_Screen.Update(m_Core.Head, m_Core.HandTracker);
-            if (m_MapsWeb != null && m_MapsScreen != null)
-            {
-                m_MapsWeb.Update();
-                m_MapsScreen.Interactive = m_MapsWeb.HasFrame;
-                m_MapsScreen.Show(m_MapsWeb.HasFrame ? m_MapsWeb.Texture : null, m_MapsWeb.Aspect,
-                    m_MapsWeb.IsLoading ? "Loading Google Maps..." : "Google Maps unavailable");
-                m_MapsScreen.Update(m_Core.Head, m_Core.HandTracker);
-            }
             m_Keys.Update(m_Core.Head, m_Core.HandTracker);
             if (!m_Keys.Visible)
                 m_Screen.SetCursor(null);
@@ -122,38 +112,28 @@ namespace CardboardXR.Demos.Desktop
                 m_Keys.Show(m_Core.Head);
         }
 
-        // Maps owns a second native WebView + floating screen. It stays independent of
-        // the normal browser, so both windows can remain open at the same time.
+        // Launch Google Maps as its own Android app, separate from the VR browser.
         void OpenGoogleMaps()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (m_MapsWeb != null)
-                return;
-            m_MapsWeb = new WebView(k_PageWidth, k_PageHeight,
-                "com.glassesxr.cardboardxr.GlassesMapsWebViewBridge");
-            m_MapsScreen = new FloatingScreen("Google Maps", m_Core.Boundary.transform, m_Material)
+            try
             {
-                Tap = p => m_MapsWeb.Tap(p),
-                HoldUp = p => m_MapsWeb.Tap(p),
-                Scroll = (p, meters) => m_MapsWeb.Scroll(p, meters * k_PixelsPerMeter),
-            };
-            m_MapsScreen.AddButton("Back", () => m_MapsWeb.Back(), "chevron_left");
-            m_MapsScreen.AddButton("Reload", () => m_MapsWeb.Reload(), "refresh");
-            m_MapsScreen.AddButton("Close", CloseGoogleMaps, "close");
-            m_MapsScreen.PlaceInFront(m_Core.Head);
-            m_MapsScreen.Root.position += m_Core.Head.right * 1.35f;
-            m_MapsWeb.Load("https://maps.google.com/");
+                using (var bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge"))
+                {
+                    if (bridge.CallStatic<bool>("launchApp", "com.google.android.apps.maps"))
+                        return;
+                }
+                m_StatusMessage = "Google Maps isn't installed. Open Apps to choose an installed app.";
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Maps] Couldn't launch native Google Maps: " + e.Message);
+                m_StatusMessage = "Couldn't launch Google Maps. Check that it is installed.";
+            }
+            m_StatusUntil = Time.unscaledTime + 6f;
 #else
-            Open("https://maps.google.com/");
+            Open("https://www.google.com/maps/");
 #endif
-        }
-
-        void CloseGoogleMaps()
-        {
-            m_MapsWeb?.Dispose();
-            m_MapsWeb = null;
-            m_MapsScreen?.Destroy();
-            m_MapsScreen = null;
         }
 
         void OpenKeyboard()
@@ -307,13 +287,11 @@ namespace CardboardXR.Demos.Desktop
 
         public bool TryBeginPinch(GameObject gazeTarget, PinchSource source) =>
             m_Screen != null && (m_Keys.TryBeginPinch(m_Core.Head) ||
-                (m_MapsScreen != null && m_MapsScreen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker)) ||
                 m_Screen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker));
 
         public void EndPinch()
         {
             m_Keys?.EndPinch();
-            m_MapsScreen?.EndPinch(m_Core.Head);
             m_Screen?.EndPinch(m_Core.Head);
         }
     }

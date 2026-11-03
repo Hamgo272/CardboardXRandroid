@@ -7,11 +7,9 @@ using UnityEngine;
 
 namespace CardboardXR.Demos.Desktop
 {
-    // A flat screen anchored in the room, like a visionOS window, for whatever a demo shows on it.
-    // A closed-fist vertical swipe scrolls the page; pinch is reserved for tapping and holding.
-    // The bar below moves the screen (it follows the gaze; moving the pinched hand forward or back
-    // pushes it away or pulls it closer); the corner resizes it to where you look. Toolbar buttons
-    // run the demo's commands. Positions in the picture are 0..1, y down.
+    // A flat, rounded XR window. Thumb-index pinch taps; while held, moving the hand vertically
+    // scrolls the page (Vision Pro-style pinch-and-drag). The top grip moves the window and the
+    // lower corner resizes it. Positions in the picture are 0..1, y down.
     public class FloatingScreen
     {
         const float k_StartWidth = 1.2f;
@@ -20,22 +18,19 @@ namespace CardboardXR.Demos.Desktop
         const float k_MaxWidth = 12f;
         const float k_MinDistance = 0.5f;
         const float k_MaxDistance = 10f;
-        // Extend index + middle fingers (a two-finger/peace gesture) and swipe vertically.
-        // This is deliberately distinct from thumb-index pinch-to-click and open-palm Settings.
-        const float k_TwoFingerScrollReach = 0.28f;
-        const float k_TwoFingerScrollStart = 0.003f;
-        // A pinch held this long without scrolling becomes a drag.
-        const float k_HoldTime = 0.35f;
-        // Moving the pinched hand forward by 1 m pushes the screen this many meters away.
+        // A pinch becomes a scroll only after a deliberate vertical hand movement.
+        const float k_ScrollStartDistance = 0.025f;
+        const float k_ScrollDeadZone = 0.0015f;
+        const float k_ScrollPixelsPerMeter = 3200f;
+        const float k_HoldTime = 0.55f;
         const float k_PushGain = 3f;
-        // Gaze slack around handles and buttons, in meters.
-        const float k_Pad = 0.03f;
+        const float k_Pad = 0.025f;
 
-        static readonly Color k_Handle = new(0.42f, 0.47f, 0.62f);
-        static readonly Color k_Hot = new(0.72f, 0.62f, 1f);
-        static readonly Color k_Backing = new(0.035f, 0.043f, 0.075f);
-        static readonly Color k_Toolbar = new(0.075f, 0.09f, 0.15f);
-        static readonly Color k_Button = new(0.15f, 0.17f, 0.27f);
+        static readonly Color k_Handle = new(0.38f, 0.48f, 0.63f, 1f);
+        static readonly Color k_Hot = new(0.32f, 0.56f, 0.88f, 1f);
+        static readonly Color k_Backing = new(0.045f, 0.055f, 0.075f, 0.98f);
+        static readonly Color k_Toolbar = new(0.085f, 0.105f, 0.14f, 0.99f);
+        static readonly Color k_Button = new(0.145f, 0.17f, 0.22f, 1f);
 
         // Tap at a point; a held pinch (down, moves, up); scroll by hand travel in meters (up > 0).
         public Action<Vector2> Tap;
@@ -81,6 +76,7 @@ namespace CardboardXR.Demos.Desktop
         readonly Material m_BarMaterial;
         readonly Material m_CornerMaterial;
         readonly TextMeshPro m_Label;
+        readonly TextMeshPro m_Title;
         readonly Transform m_Cursor;
         readonly List<Button> m_Buttons = new();
         float m_Width = k_StartWidth;
@@ -94,8 +90,6 @@ namespace CardboardXR.Demos.Desktop
         Vector2 m_PinchPoint;
         float m_MoveDistance;
         Vector3 m_GrabOffset;
-        bool m_TwoFingerScrollActive;
-        Vector3 m_LastTwoFingerScrollPoint;
         float m_ResizeStartWidth;
         Vector3 m_ResizeStartHand;
         Vector3 m_ResizeRight;
@@ -105,17 +99,23 @@ namespace CardboardXR.Demos.Desktop
             m_Template = material;
             m_Root = new GameObject(name).transform;
             m_Root.SetParent(room, false);
-            m_Backing = Part("Backing", k_Backing, out _);
+            m_Backing = Part("Backing", k_Backing, out _, rounded: true);
             m_Content = Part("Content", k_Backing, out m_ContentMaterial);
-            m_Toolbar = Part("Toolbar", k_Toolbar, out _);
-            m_Bar = Part("Move Bar", k_Handle, out m_BarMaterial);
-            m_Corner = Part("Resize Handle", k_Handle, out m_CornerMaterial);
+            m_Toolbar = Part("Toolbar", k_Toolbar, out _, rounded: true);
+            m_Bar = Part("Move Bar", k_Handle, out m_BarMaterial, rounded: true);
+            m_Corner = Part("Resize Handle", k_Handle, out m_CornerMaterial, rounded: true);
             m_Cursor = Part("Cursor", Color.white, out _);
             m_Cursor.gameObject.SetActive(false);
             m_Label = Text(m_Root, "Status");
             m_Label.enableAutoSizing = true;
             m_Label.fontSizeMin = 0.05f;
             m_Label.fontSizeMax = 1.2f;
+            m_Title = Text(m_Root, "Window Title");
+            m_Title.text = name;
+            m_Title.alignment = TextAlignmentOptions.Left;
+            m_Title.enableAutoSizing = true;
+            m_Title.fontSizeMin = 0.035f;
+            m_Title.fontSizeMax = 0.075f;
             Layout();
         }
 
@@ -123,7 +123,7 @@ namespace CardboardXR.Demos.Desktop
 
         public void AddButton(string label, Action click, string icon = null)
         {
-            var part = Part("Button " + label, k_Button, out var material);
+            var part = Part("Button " + label, k_Button, out var material, rounded: true);
             var iconText = Text(part, "Icon");
             var labelText = Text(part, "Label");
             var assets = M3Assets.Instance;
@@ -215,19 +215,26 @@ namespace CardboardXR.Demos.Desktop
             }
 
             var hand = HandPoint(hands);
-            // If a scroll pose begins during a pending pinch, cancel the pending click before
-            // dispatching scroll. This prevents a scroll-to-click race on gesture transitions.
-            if (m_Drag == Drag.Pending && hands != null && IsTwoFingerScroll(hands.Joints))
-                m_Drag = Drag.None;
-            UpdateTwoFingerScroll(hands);
+            // A thumb-index pinch starts as a tap candidate. Deliberate vertical movement turns
+            // it into a claimed scroll, preventing PinchRouter from sending a gaze click on release.
+            if (m_Drag == Drag.Pending && m_Source == PinchSource.Hand && hands != null && hands.IsTracking)
+            {
+                var travel = Vector3.Dot(HandPoint(hands) - m_HandStart, m_Root.up);
+                if (Mathf.Abs(travel) >= k_ScrollStartDistance)
+                {
+                    m_Drag = Drag.ScrollGesture;
+                    m_LastHand = HandPoint(hands);
+                    Scroll?.Invoke(m_PinchPoint, travel * k_ScrollPixelsPerMeter);
+                }
+            }
             switch (m_Drag)
             {
                 case Drag.Pending:
                     // Pinch is exclusively for clicking/holding. It never transitions into scrolling.
-                    if (Time.unscaledTime - m_PinchStart > k_HoldTime)
+                    if (HoldDown != null && Time.unscaledTime - m_PinchStart > k_HoldTime)
                     {
                         m_Drag = Drag.Hold;
-                        HoldDown?.Invoke(m_PinchPoint);
+                        HoldDown.Invoke(m_PinchPoint);
                     }
                     break;
                 case Drag.Hold:
@@ -259,76 +266,23 @@ namespace CardboardXR.Demos.Desktop
                         Layout();
                     }
                     break;
+                case Drag.ScrollGesture:
+                    if (m_Source == PinchSource.Hand && hands != null && hands.IsTracking)
+                    {
+                        var currentHand = HandPoint(hands);
+                        var delta = Vector3.Dot(currentHand - m_LastHand, m_Root.up);
+                        m_LastHand = currentHand;
+                        if (Mathf.Abs(delta) >= k_ScrollDeadZone)
+                            Scroll?.Invoke(m_PinchPoint, delta * k_ScrollPixelsPerMeter);
+                    }
+                    break;
             }
-        }
-
-        // Two-finger swipe: extend index and middle fingers, curl ring and little fingers,
-        // then move vertically over the page. Thumb position is ignored, so it cannot resemble pinch.
-        void UpdateTwoFingerScroll(HandTracker hands)
-        {
-            if ((m_Drag != Drag.None && m_Drag != Drag.ScrollGesture) || hands == null || !hands.isActiveAndEnabled ||
-                !hands.IsTracking || !IsTwoFingerScroll(hands.Joints))
-            {
-                m_TwoFingerScrollActive = false;
-                return;
-            }
-
-            var joints = hands.Joints;
-            var gesturePoint = (joints[HandGeometry.IndexTip] + joints[12]) * 0.5f;
-            var local = m_Root.InverseTransformPoint(gesturePoint);
-            var height = m_Width * m_Aspect;
-            var overPage = Mathf.Abs(local.z) <= k_TwoFingerScrollReach &&
-                           Mathf.Abs(local.x) <= m_Width * 0.5f &&
-                           Mathf.Abs(local.y) <= height * 0.5f;
-            if (!overPage)
-            {
-                m_TwoFingerScrollActive = false;
-                return;
-            }
-
-            if (!m_TwoFingerScrollActive)
-            {
-                m_TwoFingerScrollActive = true;
-                m_LastTwoFingerScrollPoint = local;
-                return;
-            }
-
-            var delta = local.y - m_LastTwoFingerScrollPoint.y;
-            m_LastTwoFingerScrollPoint = local;
-            if (Mathf.Abs(delta) < k_TwoFingerScrollStart)
-                return;
-            var point = new Vector2(local.x / m_Width + 0.5f, 0.5f - local.y / height);
-            Scroll?.Invoke(point, delta);
-        }
-
-        static bool IsTwoFingerScroll(Vector3[] joints)
-        {
-            if (joints == null || joints.Length < HandGeometry.JointCount)
-                return false;
-            var wrist = joints[0];
-            bool Extended(int tip, int pip) =>
-                Vector3.Distance(joints[tip], wrist) > Vector3.Distance(joints[pip], wrist) * 1.12f;
-            bool Curled(int tip, int pip) =>
-                Vector3.Distance(joints[tip], wrist) < Vector3.Distance(joints[pip], wrist) * 1.08f;
-            return Extended(HandGeometry.IndexTip, 6) &&
-                   Extended(12, 10) &&
-                   Curled(16, 14) &&
-                   Curled(20, 18);
         }
 
         // ---------- pinches ----------
 
         public bool TryBeginPinch(Transform head, PinchSource source, HandTracker hands)
         {
-            // Claim the pinch while the scroll pose is active. Returning false would let
-            // PinchRouter fall through to a normal gaze click, which is the click/scroll conflict.
-            if (source == PinchSource.Hand && hands != null && IsTwoFingerScroll(hands.Joints))
-            {
-                m_Source = source;
-                m_Drag = Drag.ScrollGesture;
-                return true;
-            }
-
             var local = Hit(new Ray(head.position, head.forward));
             if (!local.HasValue)
                 return false;
@@ -395,15 +349,72 @@ namespace CardboardXR.Demos.Desktop
 
         // A flat part facing the user. Gaze is tested against the screen's plane, not colliders, so
         // parts have none: the app's own gaze and cube placement never see them.
-        Transform Part(string name, Color color, out Material material)
+        static Mesh s_RoundedQuad;
+
+        Transform Part(string name, Color color, out Material material, bool rounded = false)
         {
-            var part = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            part.name = name;
-            UnityEngine.Object.Destroy(part.GetComponent<Collider>());
+            GameObject part;
+            if (rounded)
+            {
+                part = new GameObject(name);
+                if (s_RoundedQuad == null)
+                    s_RoundedQuad = CreateRoundedQuad();
+                part.AddComponent<MeshFilter>().sharedMesh = s_RoundedQuad;
+            }
+            else
+            {
+                part = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                UnityEngine.Object.Destroy(part.GetComponent<Collider>());
+                part.name = name;
+            }
             part.transform.SetParent(m_Root, false);
             material = new Material(m_Template) { color = color };
             part.GetComponent<MeshRenderer>().sharedMaterial = material;
             return part.transform;
+        }
+
+        static Mesh CreateRoundedQuad()
+        {
+            const int segmentsPerCorner = 5;
+            const float radius = 0.13f;
+            var vertices = new List<Vector3> { Vector3.zero };
+            var uv = new List<Vector2> { new Vector2(0.5f, 0.5f) };
+            var corners = new[]
+            {
+                (center: new Vector2(0.5f - radius, -0.5f + radius), start: -90f),
+                (center: new Vector2(0.5f - radius, 0.5f - radius), start: 0f),
+                (center: new Vector2(-0.5f + radius, 0.5f - radius), start: 90f),
+                (center: new Vector2(-0.5f + radius, -0.5f + radius), start: 180f),
+            };
+            foreach (var corner in corners)
+            {
+                for (var i = 0; i <= segmentsPerCorner; i++)
+                {
+                    var angle = (corner.start + 90f * i / segmentsPerCorner) * Mathf.Deg2Rad;
+                    var point = corner.center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+                    vertices.Add(new Vector3(point.x, point.y, 0f));
+                    uv.Add(new Vector2(point.x + 0.5f, point.y + 0.5f));
+                }
+            }
+
+            var triangles = new List<int>();
+            for (var i = 1; i < vertices.Count; i++)
+            {
+                var next = i == vertices.Count - 1 ? 1 : i + 1;
+                // Reverse the fan so its front face matches Unity's -Z-facing Quad.
+                triangles.Add(0);
+                triangles.Add(next);
+                triangles.Add(i);
+            }
+            var mesh = new Mesh { name = "Rounded XR Window Quad" };
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0, uv);
+            mesh.SetTriangles(triangles, 0);
+            var normals = new Vector3[vertices.Count];
+            for (var i = 0; i < normals.Length; i++) normals[i] = Vector3.back;
+            mesh.normals = normals;
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         static TextMeshPro Text(Transform parent, string name)
@@ -426,32 +437,40 @@ namespace CardboardXR.Demos.Desktop
         {
             var height = m_Width * m_Aspect;
             m_Content.localScale = new Vector3(m_Width, height, 1f);
-            // The backing includes the bottom control shelf, making the browser feel like one window.
-            const float shelfGap = 0.035f;
-            var barWidth = Mathf.Clamp(m_Width * 0.25f, 0.12f, 0.6f);
-            m_Bar.localScale = new Vector3(barWidth, 0.035f, 1f);
-            m_Bar.localPosition = new Vector3(0f, height / 2f + 0.055f, 0f);
-            var corner = Mathf.Clamp(m_Width * 0.045f, 0.055f, 0.22f);
-            m_Corner.localScale = new Vector3(corner, corner, 1f);
-            m_Corner.localPosition = new Vector3(m_Width / 2f - corner * 0.35f, -height / 2f - corner * 0.35f, -0.002f);
-            m_Label.rectTransform.sizeDelta = new Vector2(m_Width * 0.85f, height * 0.85f);
 
-            // Large, gaze-friendly toolbar buttons. Keep at most four columns so adding
-            // controls creates additional rows instead of squeezing every button smaller.
-            const float buttonHeight = 0.19f, gap = 0.022f, edge = 0.035f, minButtonWidth = 0.22f;
+            const float headerHeight = 0.10f;
+            const float shelfGap = 0.035f;
+            var barWidth = Mathf.Clamp(m_Width * 0.20f, 0.14f, 0.30f);
+            m_Bar.localScale = new Vector3(barWidth, 0.014f, 1f);
+            m_Bar.localPosition = new Vector3(m_Width * 0.34f, height / 2f + headerHeight * 0.5f, 0f);
+
+            var corner = Mathf.Clamp(m_Width * 0.035f, 0.045f, 0.16f);
+            m_Corner.localScale = new Vector3(corner, corner, 1f);
+            m_Corner.localPosition = new Vector3(m_Width / 2f - corner * 0.30f,
+                -height / 2f - corner * 0.30f, -0.002f);
+            m_Label.rectTransform.sizeDelta = new Vector2(m_Width * 0.84f, height * 0.82f);
+            m_Title.rectTransform.sizeDelta = new Vector2(m_Width * 0.56f, 0.065f);
+            m_Title.transform.localPosition = new Vector3(-m_Width * 0.47f,
+                height / 2f + headerHeight * 0.5f, -0.012f);
+
+            // Compact Material-style control dock: up to six columns, with an icon and a short
+            // label instead of the old oversized grid of large rectangular buttons.
+            const float buttonHeight = 0.125f, gap = 0.012f, edge = 0.035f, minButtonWidth = 0.15f;
             var available = Mathf.Max(0.20f, m_Width - edge * 2f);
             var columns = Mathf.Max(1, Mathf.FloorToInt((available + gap) / (minButtonWidth + gap)));
-            columns = Mathf.Min(4, Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count)));
+            columns = Mathf.Min(6, Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count)));
             var buttonWidth = (available - gap * (columns - 1)) / columns;
             var rows = Mathf.Max(1, (m_Buttons.Count + columns - 1) / columns);
-            var toolbarHeight = rows * buttonHeight + (rows - 1) * gap + 0.03f;
+            var toolbarHeight = rows * buttonHeight + (rows - 1) * gap + 0.024f;
             var toolbarBottom = -height / 2f - shelfGap;
             var toolbarCenter = toolbarBottom - toolbarHeight / 2f;
             m_Toolbar.gameObject.SetActive(m_Buttons.Count > 0);
-            m_Toolbar.localScale = new Vector3(m_Width + 0.04f, toolbarHeight, 1f);
+            m_Toolbar.localScale = new Vector3(m_Width + 0.035f, toolbarHeight, 1f);
             m_Toolbar.localPosition = new Vector3(0f, toolbarCenter, 0.006f);
-            m_Backing.localScale = new Vector3(m_Width + 0.04f, height + toolbarHeight + shelfGap + 0.04f, 1f);
-            m_Backing.localPosition = new Vector3(0f, -(toolbarHeight + shelfGap) / 2f, 0.005f);
+
+            var backingHeight = headerHeight + height + shelfGap + toolbarHeight + 0.035f;
+            m_Backing.localScale = new Vector3(m_Width + 0.045f, backingHeight, 1f);
+            m_Backing.localPosition = new Vector3(0f, (headerHeight - toolbarHeight - shelfGap) / 2f, 0.012f);
 
             for (var i = 0; i < m_Buttons.Count; i++)
             {
@@ -461,28 +480,25 @@ namespace CardboardXR.Demos.Desktop
                 var rowCount = Mathf.Min(columns, m_Buttons.Count - row * columns);
                 var rowWidth = rowCount * buttonWidth + (rowCount - 1) * gap;
                 var x = -rowWidth / 2f + buttonWidth / 2f + column * (buttonWidth + gap);
-                var y = toolbarBottom - 0.015f - buttonHeight / 2f - row * (buttonHeight + gap);
+                var y = toolbarBottom - 0.012f - buttonHeight / 2f - row * (buttonHeight + gap);
                 button.Part.localScale = new Vector3(buttonWidth, buttonHeight, 1f);
                 button.Part.localPosition = new Vector3(x, y, -0.002f);
 
                 var textScale = new Vector3(1f / buttonWidth, 1f / buttonHeight, 1f);
                 button.Icon.transform.localScale = textScale;
                 button.Label.transform.localScale = textScale;
-                button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.095f);
-                button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.06f);
-                // The label and icon are inversely scaled with their button. TMP's font size is
-                // therefore in the button's unscaled space, not meters.
-                button.Icon.fontSize = 0.82f;
-                button.Label.fontSize = 0.40f;
+                button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.072f);
+                button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.032f);
+                button.Icon.fontSize = 0.72f;
+                button.Label.fontSize = 0.19f;
                 button.Icon.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Label.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Icon.overflowMode = TextOverflowModes.Overflow;
                 button.Label.overflowMode = TextOverflowModes.Ellipsis;
                 button.Icon.gameObject.SetActive(button.HasIcon);
-                button.Label.transform.localPosition = new Vector3(0f,
-                    (button.HasIcon ? -0.048f : 0f) / buttonHeight, -0.01f);
+                button.Label.transform.localPosition = new Vector3(0f, -0.042f / buttonHeight, -0.01f);
                 if (button.HasIcon)
-                    button.Icon.transform.localPosition = new Vector3(0f, 0.035f / buttonHeight, -0.01f);
+                    button.Icon.transform.localPosition = new Vector3(0f, 0.027f / buttonHeight, -0.01f);
             }
         }
 
