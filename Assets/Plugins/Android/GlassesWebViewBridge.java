@@ -1,11 +1,17 @@
 package com.glassesxr.cardboardxr;
 
 import android.app.Activity;
+import android.app.Presentation;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
+import android.media.Image;
+import android.media.ImageReader;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,15 +23,18 @@ import android.webkit.WebViewClient;
 
 import com.unity3d.player.UnityPlayer;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
-/** Android browser bridge. Hidden WebView renders into bottom-up RGBA frames for Unity. */
+/** Android browser bridge. A hardware-rendered WebView display is copied into RGBA frames for Unity. */
 public final class GlassesWebViewBridge {
     private static Activity activity;
     private static FrameLayout container;
     private static android.webkit.WebView webView;
-    private static Bitmap bitmap;
+    private static Presentation presentation;
+    private static VirtualDisplay virtualDisplay;
+    private static ImageReader imageReader;
     private static Handler handler;
     private static Runnable captureTask;
     private static byte[] latestRgba;
@@ -62,15 +71,27 @@ public final class GlassesWebViewBridge {
             frameNumber = copiedFrameNumber = 0;
             latestRgba = null;
             loading = false;
-            View content = activity.findViewById(android.R.id.content);
-            if (!(content instanceof ViewGroup)) return 0;
 
-            container = new FrameLayout(activity);
+            imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
+            DisplayManager displayManager = (DisplayManager) activity.getSystemService(Activity.DISPLAY_SERVICE);
+            int densityDpi = activity.getResources().getDisplayMetrics().densityDpi;
+            virtualDisplay = displayManager.createVirtualDisplay(
+                    "CardboardXR.Web", width, height, densityDpi, imageReader.getSurface(),
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY |
+                            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION);
+            if (virtualDisplay == null) {
+                imageReader.close();
+                imageReader = null;
+                return 0;
+            }
+
+            Display display = virtualDisplay.getDisplay();
+            presentation = new Presentation(activity, display);
+            container = new FrameLayout(presentation.getContext());
             container.setBackgroundColor(Color.BLACK);
-            webView = new android.webkit.WebView(activity);
+            webView = new android.webkit.WebView(presentation.getContext());
             webView.setFocusable(true);
             webView.setFocusableInTouchMode(true);
-            webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
             WebSettings settings = webView.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
@@ -90,12 +111,12 @@ public final class GlassesWebViewBridge {
                 }
             });
             webView.setWebChromeClient(new WebChromeClient());
-            container.addView(webView, new FrameLayout.LayoutParams(width, height));
-            ((ViewGroup) content).addView(container, 0, new ViewGroup.LayoutParams(
+            container.addView(webView, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            presentation.setContentView(container);
+            presentation.show();
             container.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
 
-            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
             handler = new Handler(Looper.getMainLooper());
             captureTask = new Runnable() {
                 @Override public void run() {
@@ -110,32 +131,34 @@ public final class GlassesWebViewBridge {
     }
 
     private static void captureOnUiThread() {
-        if (webView == null || bitmap == null || !webView.isAttachedToWindow()) return;
+        if (imageReader == null) return;
+        Image image = null;
         try {
-            int w = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY);
-            int h = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY);
-            webView.measure(w, h);
-            webView.layout(0, 0, width, height);
-            Canvas canvas = new Canvas(bitmap);
-            canvas.drawColor(Color.BLACK);
-            webView.draw(canvas);
-            int[] argb = new int[width * height];
-            bitmap.getPixels(argb, 0, width, 0, 0, width, height);
+            image = imageReader.acquireLatestImage();
+            if (image == null) return;
+            Image.Plane plane = image.getPlanes()[0];
+            ByteBuffer pixels = plane.getBuffer();
+            int base = pixels.position();
+            int rowStride = plane.getRowStride();
+            int pixelStride = plane.getPixelStride();
             byte[] rgba = new byte[width * height * 4];
             for (int y = 0; y < height; y++) {
-                int source = (height - 1 - y) * width;
+                int sourceY = height - 1 - y;
+                int source = base + sourceY * rowStride;
                 int target = y * width * 4;
                 for (int x = 0; x < width; x++) {
-                    int color = argb[source + x];
-                    rgba[target++] = (byte) ((color >> 16) & 0xff);
-                    rgba[target++] = (byte) ((color >> 8) & 0xff);
-                    rgba[target++] = (byte) (color & 0xff);
-                    rgba[target++] = (byte) ((color >>> 24) & 0xff);
+                    int pixel = source + x * pixelStride;
+                    rgba[target++] = pixels.get(pixel);
+                    rgba[target++] = pixels.get(pixel + 1);
+                    rgba[target++] = pixels.get(pixel + 2);
+                    rgba[target++] = pixels.get(pixel + 3);
                 }
             }
             synchronized (frameLock) { latestRgba = rgba; frameNumber++; }
         } catch (RuntimeException e) {
             android.util.Log.w("CardboardXR.Web", "Could not capture WebView frame", e);
+        } finally {
+            if (image != null) image.close();
         }
     }
 
@@ -183,16 +206,18 @@ public final class GlassesWebViewBridge {
         if (handler != null && captureTask != null) handler.removeCallbacks(captureTask);
         handler = null;
         captureTask = null;
+        if (container != null && webView != null) container.removeView(webView);
+        if (presentation != null) presentation.dismiss();
+        presentation = null;
         if (webView != null) {
             webView.stopLoading();
             webView.loadUrl("about:blank");
             webView.destroy();
             webView = null;
         }
-        if (container != null && container.getParent() instanceof ViewGroup)
-            ((ViewGroup) container.getParent()).removeView(container);
         container = null;
-        if (bitmap != null) { bitmap.recycle(); bitmap = null; }
+        if (virtualDisplay != null) { virtualDisplay.release(); virtualDisplay = null; }
+        if (imageReader != null) { imageReader.close(); imageReader = null; }
         synchronized (frameLock) { latestRgba = null; frameNumber = copiedFrameNumber = 0; }
         activity = null;
     }

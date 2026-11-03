@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace CardboardXR.Demos.Desktop
 {
-    // Unity-side adapter for the native browser. iOS uses WKWebView; Android uses an off-screen
-    // Android WebView rendered into a bitmap. Other platforms keep the browser demo unavailable.
+    // Unity-side adapter for the native browser. iOS uses WKWebView; Android captures a
+    // hardware-rendered WebView display. Other platforms keep the browser demo unavailable.
     public sealed class WebView : IDisposable
     {
 #if UNITY_IOS && !UNITY_EDITOR
