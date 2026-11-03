@@ -101,6 +101,7 @@ namespace CardboardXR.Interaction
             m_Held = true;
             m_ClickCancelled = false;
             m_PressTime = Time.unscaledTime;
+            AndroidHaptics.Confirm();
             var eventData = EventData;
             eventData.eligibleForClick = true;
             eventData.pointerPressRaycast = eventData.pointerCurrentRaycast;
