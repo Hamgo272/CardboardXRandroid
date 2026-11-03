@@ -25,35 +25,24 @@ namespace CardboardXR.Demos.Desktop
         static string GlassesWeb_ConsumeVoiceResult() => null;
         public static bool Supported => true;
 #elif UNITY_ANDROID && !UNITY_EDITOR
-        static AndroidJavaClass s_Bridge;
+        readonly AndroidJavaClass m_AndroidBridge;
 
-        static AndroidJavaClass Bridge
+        int GlassesWeb_Create(int width, int height) => m_AndroidBridge.CallStatic<int>("create", width, height);
+        void GlassesWeb_Load(string url) => m_AndroidBridge.CallStatic("load", url);
+        void GlassesWeb_Eval(string script) => m_AndroidBridge.CallStatic("evaluate", script);
+        void GlassesWeb_Tap(float x, float y) => m_AndroidBridge.CallStatic("tap", x, y);
+        void GlassesWeb_Back() => m_AndroidBridge.CallStatic("back");
+        void GlassesWeb_Reload() => m_AndroidBridge.CallStatic("reload");
+        void GlassesWeb_StartVoiceSearch() => m_AndroidBridge.CallStatic("startVoiceSearch");
+        string GlassesWeb_ConsumeVoiceResult() => m_AndroidBridge.CallStatic<string>("consumeVoiceResult");
+        int GlassesWeb_IsLoading() => m_AndroidBridge.CallStatic<bool>("isLoading") ? 1 : 0;
+        byte[] GlassesWeb_CopyFrame() => m_AndroidBridge.CallStatic<byte[]>("copyFrame");
+        void GlassesWeb_Destroy()
         {
-            get
-            {
-                if (s_Bridge == null)
-                    s_Bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge");
-                return s_Bridge;
-            }
-        }
-
-        static int GlassesWeb_Create(int width, int height) => Bridge.CallStatic<int>("create", width, height);
-        static void GlassesWeb_Load(string url) => Bridge.CallStatic("load", url);
-        static void GlassesWeb_Eval(string script) => Bridge.CallStatic("evaluate", script);
-        static void GlassesWeb_Tap(float x, float y) => Bridge.CallStatic("tap", x, y);
-        static void GlassesWeb_Back() => Bridge.CallStatic("back");
-        static void GlassesWeb_Reload() => Bridge.CallStatic("reload");
-        static void GlassesWeb_StartVoiceSearch() => Bridge.CallStatic("startVoiceSearch");
-        static string GlassesWeb_ConsumeVoiceResult() => Bridge.CallStatic<string>("consumeVoiceResult");
-        static int GlassesWeb_IsLoading() => Bridge.CallStatic<bool>("isLoading") ? 1 : 0;
-        static byte[] GlassesWeb_CopyFrame() => Bridge.CallStatic<byte[]>("copyFrame");
-        static void GlassesWeb_Destroy()
-        {
-            if (s_Bridge == null)
+            if (m_AndroidBridge == null)
                 return;
-            s_Bridge.CallStatic("destroy");
-            s_Bridge.Dispose();
-            s_Bridge = null;
+            m_AndroidBridge.CallStatic("destroy");
+            m_AndroidBridge.Dispose();
         }
         public static bool Supported => true;
 #else
@@ -126,8 +115,11 @@ namespace CardboardXR.Demos.Desktop
             }
         }
 
-        public WebView(int width, int height)
+        public WebView(int width, int height, string androidBridgeClass = "com.glassesxr.cardboardxr.GlassesWebViewBridge")
         {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            m_AndroidBridge = new AndroidJavaClass(androidBridgeClass);
+#endif
             m_Width = width;
             m_Height = height;
             m_Buffer = new byte[width * height * 4];
