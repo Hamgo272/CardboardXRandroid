@@ -306,11 +306,14 @@ namespace CardboardXR.Demos.Desktop
              url.Contains("youtu.be", StringComparison.OrdinalIgnoreCase));
 
         public bool TryBeginPinch(GameObject gazeTarget, PinchSource source) =>
-            m_Screen != null && (m_Keys.TryBeginPinch(m_Core.Head) || m_Screen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker));
+            m_Screen != null && (m_Keys.TryBeginPinch(m_Core.Head) ||
+                (m_MapsScreen != null && m_MapsScreen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker)) ||
+                m_Screen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker));
 
         public void EndPinch()
         {
             m_Keys?.EndPinch();
+            m_MapsScreen?.EndPinch(m_Core.Head);
             m_Screen?.EndPinch(m_Core.Head);
         }
     }
