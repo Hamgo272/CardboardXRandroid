@@ -33,11 +33,11 @@ namespace CardboardXR.Demos.Desktop
         // Gaze slack around handles and buttons, in meters.
         const float k_Pad = 0.03f;
 
-        static readonly Color k_Handle = new(0.72f, 0.72f, 0.76f);
-        static readonly Color k_Hot = new(0.35f, 0.8f, 1f);
-        static readonly Color k_Backing = new(0.07f, 0.07f, 0.09f);
-        static readonly Color k_Toolbar = new(0.09f, 0.1f, 0.13f);
-        static readonly Color k_Button = new(0.18f, 0.18f, 0.22f);
+        static readonly Color k_Handle = new(0.42f, 0.47f, 0.62f);
+        static readonly Color k_Hot = new(0.72f, 0.62f, 1f);
+        static readonly Color k_Backing = new(0.035f, 0.043f, 0.075f);
+        static readonly Color k_Toolbar = new(0.075f, 0.09f, 0.15f);
+        static readonly Color k_Button = new(0.15f, 0.17f, 0.27f);
 
         // Tap at a point; a held pinch (down, moves, up); scroll by hand travel in meters (up > 0).
         public Action<Vector2> Tap;
@@ -283,7 +283,7 @@ namespace CardboardXR.Demos.Desktop
                 return;
             }
 
-            var wrist = hands.Joints[HandGeometry.JointCount > 0 ? 0 : 0];
+            var wrist = hands.Joints[0];
             var local = m_Root.InverseTransformPoint(wrist);
             var height = m_Width * m_Aspect;
             var overPage = Mathf.Abs(local.z) <= k_PalmScrollReach &&
@@ -324,6 +324,7 @@ namespace CardboardXR.Demos.Desktop
             var button = NearestButton(local.Value);
             if (button != null)
             {
+                CardboardXR.Interaction.AndroidHaptics.Confirm();
                 button.Click?.Invoke();
                 m_Drag = Drag.None;
                 return true;
