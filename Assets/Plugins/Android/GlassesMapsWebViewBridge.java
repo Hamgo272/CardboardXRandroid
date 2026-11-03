@@ -108,6 +108,14 @@ public final class GlassesMapsWebViewBridge {
             settings.setUseWideViewPort(true);
             settings.setBuiltInZoomControls(false);
             settings.setDisplayZoomControls(false);
+            // Google Maps blocks some embedded-WebView user agents. Present this dedicated
+            // Maps surface as a normal Chrome browser rather than an Android WebView.
+            String mapsUserAgent = settings.getUserAgentString();
+            if (mapsUserAgent != null) {
+                mapsUserAgent = mapsUserAgent.replace("; wv", "").replace("Version/4.0 ", "");
+                settings.setUserAgentString(mapsUserAgent);
+            }
+            settings.setJavaScriptCanOpenWindowsAutomatically(true);
             CookieManager.getInstance().setAcceptCookie(true);
             webView.setWebViewClient(new WebViewClient() {
                 // Do not hand YouTube/video URLs to another activity. Let WebView navigate in-app.
