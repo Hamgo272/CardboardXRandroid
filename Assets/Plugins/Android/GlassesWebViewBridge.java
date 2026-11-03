@@ -115,6 +115,7 @@ public final class GlassesWebViewBridge {
             settings.setUseWideViewPort(true);
             settings.setBuiltInZoomControls(false);
             settings.setDisplayZoomControls(false);
+            settings.setTextZoom(125);
             CookieManager.getInstance().setAcceptCookie(true);
             webView.setWebViewClient(new WebViewClient() {
                 // Do not hand YouTube/video URLs to another activity. Let WebView navigate in-app.

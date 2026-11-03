@@ -141,7 +141,9 @@ namespace CardboardXR.Demos.Desktop
             m_MapsScreen = new FloatingScreen("Google Maps", m_Core.Boundary.transform, m_Material)
             {
                 Tap = point => m_MapsWeb.Tap(point),
-                HoldUp = point => m_MapsWeb.Tap(point),
+                HoldDown = point => m_MapsWeb.TouchDown(point),
+                HoldMove = point => m_MapsWeb.TouchMove(point),
+                HoldUp = point => m_MapsWeb.TouchUp(point),
                 Scroll = (point, pixels) => m_MapsWeb.Scroll(point, pixels),
             };
             m_MapsScreen.AddButton("Back", () => m_MapsWeb?.Back(), "chevron_left");

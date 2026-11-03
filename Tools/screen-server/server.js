@@ -181,6 +181,15 @@ function addresses() {
     .filter((a) => a && a.family === 'IPv4' && !a.internal)
     .map((a) => `${a.address}:${PORT}`);
 }
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. If the CardboardXR screen server is already running, open http://localhost:${PORT} instead of starting another copy.`);
+  } else {
+    console.error('Could not start the CardboardXR screen server:', error.message);
+  }
+  process.exitCode = 1;
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log('\nGlasses screen server is running.');
   console.log(`Open http://localhost:${PORT} in Chrome/Chromium on this computer and press Share.`);

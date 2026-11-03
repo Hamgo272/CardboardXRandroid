@@ -111,14 +111,14 @@ namespace CardboardXR.Demos.Desktop
             m_Cursor.gameObject.SetActive(false);
             m_Label = Text(m_Root, "Status");
             m_Label.enableAutoSizing = true;
-            m_Label.fontSizeMin = 0.05f;
-            m_Label.fontSizeMax = 1.2f;
+            m_Label.fontSizeMin = 0.10f;
+            m_Label.fontSizeMax = 1.4f;
             m_Title = Text(m_Root, "Window Title");
             m_Title.text = name;
             m_Title.alignment = TextAlignmentOptions.Left;
             m_Title.enableAutoSizing = true;
-            m_Title.fontSizeMin = 0.035f;
-            m_Title.fontSizeMax = 0.075f;
+            m_Title.fontSizeMin = 0.06f;
+            m_Title.fontSizeMax = 0.11f;
             Layout();
         }
 
@@ -463,7 +463,7 @@ namespace CardboardXR.Demos.Desktop
 
             // Compact Material-style control dock: up to six columns, with an icon and a short
             // label instead of the old oversized grid of large rectangular buttons.
-            const float buttonHeight = 0.125f, gap = 0.012f, edge = 0.035f, minButtonWidth = 0.15f;
+            const float buttonHeight = 0.14f, gap = 0.012f, edge = 0.035f, minButtonWidth = 0.15f;
             var available = Mathf.Max(0.20f, m_Width - edge * 2f);
             var columns = Mathf.Max(1, Mathf.FloorToInt((available + gap) / (minButtonWidth + gap)));
             columns = Mathf.Min(6, Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count)));
@@ -496,15 +496,15 @@ namespace CardboardXR.Demos.Desktop
                 button.Icon.transform.localScale = textScale;
                 button.Label.transform.localScale = textScale;
                 button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.072f);
-                button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.032f);
-                button.Icon.fontSize = 0.72f;
-                button.Label.fontSize = 0.19f;
+                button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.040f);
+                button.Icon.fontSize = 0.88f;
+                button.Label.fontSize = 0.29f;
                 button.Icon.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Label.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Icon.overflowMode = TextOverflowModes.Overflow;
                 button.Label.overflowMode = TextOverflowModes.Ellipsis;
                 button.Icon.gameObject.SetActive(button.HasIcon);
-                button.Label.transform.localPosition = new Vector3(0f, -0.042f / buttonHeight, -0.01f);
+                button.Label.transform.localPosition = new Vector3(0f, -0.048f / buttonHeight, -0.01f);
                 if (button.HasIcon)
                     button.Icon.transform.localPosition = new Vector3(0f, 0.027f / buttonHeight, -0.01f);
             }

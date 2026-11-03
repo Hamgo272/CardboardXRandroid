@@ -22,6 +22,9 @@ namespace CardboardXR.Demos.Desktop
         [DllImport("__Internal")] static extern int GlassesWeb_CopyFrame(byte[] buffer, int length, int lastFrame);
         [DllImport("__Internal")] static extern void GlassesWeb_Destroy();
         static void GlassesWeb_StartVoiceSearch() { }
+        static void GlassesWeb_TouchDown(float x, float y) { }
+        static void GlassesWeb_TouchMove(float x, float y) { }
+        static void GlassesWeb_TouchUp(float x, float y) { }
         static string GlassesWeb_ConsumeVoiceResult() => null;
         static string GlassesWeb_GetLastError() => null;
         public static bool Supported => true;
@@ -33,6 +36,9 @@ namespace CardboardXR.Demos.Desktop
         void GlassesWeb_Eval(string script) => m_AndroidBridge.CallStatic("evaluate", script);
         void GlassesWeb_Scroll(float x, float y, float pixels) => m_AndroidBridge.CallStatic("scroll", x, y, pixels);
         void GlassesWeb_Tap(float x, float y) => m_AndroidBridge.CallStatic("tap", x, y);
+        void GlassesWeb_TouchDown(float x, float y) => m_AndroidBridge.CallStatic("touchDown", x, y);
+        void GlassesWeb_TouchMove(float x, float y) => m_AndroidBridge.CallStatic("touchMove", x, y);
+        void GlassesWeb_TouchUp(float x, float y) => m_AndroidBridge.CallStatic("touchUp", x, y);
         void GlassesWeb_Back() => m_AndroidBridge.CallStatic("back");
         void GlassesWeb_Reload() => m_AndroidBridge.CallStatic("reload");
         void GlassesWeb_StartVoiceSearch() => m_AndroidBridge.CallStatic("startVoiceSearch");
@@ -55,6 +61,9 @@ namespace CardboardXR.Demos.Desktop
         static void GlassesWeb_Back() { }
         static void GlassesWeb_Reload() { }
         static void GlassesWeb_StartVoiceSearch() { }
+        static void GlassesWeb_TouchDown(float x, float y) { }
+        static void GlassesWeb_TouchMove(float x, float y) { }
+        static void GlassesWeb_TouchUp(float x, float y) { }
         static string GlassesWeb_ConsumeVoiceResult() => null;
         static string GlassesWeb_GetLastError() => null;
         static int GlassesWeb_IsLoading() => 0;
@@ -152,6 +161,15 @@ namespace CardboardXR.Demos.Desktop
             GlassesWeb_Eval(Fill(k_Tap, Number(point.x * m_Width), Number(point.y * m_Height)));
 #endif
         }
+
+        public void TouchDown(Vector2 point) =>
+            GlassesWeb_TouchDown(Mathf.Clamp01(point.x) * m_Width, Mathf.Clamp01(point.y) * m_Height);
+
+        public void TouchMove(Vector2 point) =>
+            GlassesWeb_TouchMove(Mathf.Clamp01(point.x) * m_Width, Mathf.Clamp01(point.y) * m_Height);
+
+        public void TouchUp(Vector2 point) =>
+            GlassesWeb_TouchUp(Mathf.Clamp01(point.x) * m_Width, Mathf.Clamp01(point.y) * m_Height);
 
         public void Scroll(Vector2 point, float pixels)
         {

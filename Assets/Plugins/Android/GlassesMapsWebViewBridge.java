@@ -58,6 +58,7 @@ public final class GlassesMapsWebViewBridge {
     private static float pendingScrollY;
     private static float pendingScrollDelta;
     private static boolean scrollDispatchPosted;
+    private static long touchDownTime;
     private static final int CAPTURE_INTERVAL_MS = 33;
 
     private GlassesMapsWebViewBridge() { }
@@ -115,13 +116,9 @@ public final class GlassesMapsWebViewBridge {
             settings.setUseWideViewPort(true);
             settings.setBuiltInZoomControls(false);
             settings.setDisplayZoomControls(false);
-            // Google Maps blocks some embedded-WebView user agents. Present this dedicated
-            // Maps surface as a normal Chrome browser rather than an Android WebView.
-            String mapsUserAgent = settings.getUserAgentString();
-            if (mapsUserAgent != null) {
-                mapsUserAgent = mapsUserAgent.replace("; wv", "").replace("Version/4.0 ", "");
-                settings.setUserAgentString(mapsUserAgent);
-            }
+            settings.setTextZoom(125);
+            // Google documents Android Chrome WebView as a supported Maps browser. Keep the
+            // platform user agent intact so its Client Hints and engine identity stay consistent.
             settings.setJavaScriptCanOpenWindowsAutomatically(true);
             CookieManager.getInstance().setAcceptCookie(true);
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -261,17 +258,41 @@ public final class GlassesMapsWebViewBridge {
             // Use one DOM scroll operation. The old code dispatched a synthetic wheel event
             // and also called scrollBy, duplicating work and sometimes scrolling twice.
             String script =
-                    "(function(x,y,d){var e=document.elementFromPoint(x,y),root=document.scrollingElement||document.documentElement;" +
-                    "while(e&&e!==document.documentElement){var s=getComputedStyle(e),o=s.overflowY;" +
-                    "if((o=='auto'||o=='scroll'||o=='overlay')&&e.scrollHeight>e.clientHeight+1){" +
-                    "var max=e.scrollHeight-e.clientHeight,next=Math.max(0,Math.min(max,e.scrollTop+d));" +
-                    "if(next!==e.scrollTop){e.scrollTop=next;return;}" +
-                    "if(s.overscrollBehaviorY=='contain'||s.overscrollBehaviorY=='none')return;}e=e.parentElement;}" +
-                    "root.scrollTop=Math.max(0,root.scrollTop+d);})(" +
+                    "(function(x,y,d){var e=document.elementFromPoint(x,y)||document.documentElement;" +
+                    "var w=new WheelEvent('wheel',{bubbles:true,cancelable:true,view:window,clientX:x,clientY:y,deltaX:0,deltaY:-d,deltaMode:0});" +
+                    "if(!e.dispatchEvent(w)){return;}" +
+                    "var root=document.scrollingElement||document.documentElement;root.scrollTop=Math.max(0,root.scrollTop+d);})(" +
                     Float.toString(scrollX) + "," + Float.toString(scrollY) + "," + Float.toString(scrollDelta) + ")";
             webView.evaluateJavascript(script, null);
         });
     }
+
+    /** Dispatch a continuous touch gesture in the same top-left coordinate space as the page. */
+    private static void dispatchTouch(final int action, final float x, final float y) {
+        Activity current = UnityPlayer.currentActivity;
+        if (current == null) return;
+        current.runOnUiThread(() -> {
+            if (webView == null || width <= 0 || height <= 0) return;
+            webView.requestFocus();
+            int viewWidth = webView.getWidth();
+            int viewHeight = webView.getHeight();
+            if (viewWidth <= 0 || viewHeight <= 0) return;
+            float px = Math.max(0f, Math.min(viewWidth - 1f, x * viewWidth / width));
+            float py = Math.max(0f, Math.min(viewHeight - 1f, y * viewHeight / height));
+            long now = android.os.SystemClock.uptimeMillis();
+            if (action == MotionEvent.ACTION_DOWN) touchDownTime = now;
+            long downTime = touchDownTime == 0 ? now : touchDownTime;
+            MotionEvent event = MotionEvent.obtain(downTime, now, action, px, py, 0);
+            webView.dispatchTouchEvent(event);
+            event.recycle();
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+                touchDownTime = 0;
+        });
+    }
+
+    public static void touchDown(float x, float y) { dispatchTouch(MotionEvent.ACTION_DOWN, x, y); }
+    public static void touchMove(float x, float y) { dispatchTouch(MotionEvent.ACTION_MOVE, x, y); }
+    public static void touchUp(float x, float y) { dispatchTouch(MotionEvent.ACTION_UP, x, y); }
 
     /** Dispatch a touch in the same top-left coordinate space as the captured page. */
     public static void tap(final float x, final float y) {
