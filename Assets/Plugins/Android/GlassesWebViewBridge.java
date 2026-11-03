@@ -228,10 +228,12 @@ public final class GlassesWebViewBridge {
                     String.valueOf(a.loadLabel(activity.getPackageManager())).compareToIgnoreCase(
                             String.valueOf(b.loadLabel(activity.getPackageManager()))));
             java.util.ArrayList<String> apps = new java.util.ArrayList<>();
+            java.util.HashSet<String> seenPackages = new java.util.HashSet<>();
             String ownPackage = activity.getPackageName();
             for (android.content.pm.ResolveInfo info : matches) {
                 if (info.activityInfo == null || ownPackage.equals(info.activityInfo.packageName)) continue;
                 String packageName = info.activityInfo.packageName;
+                if (!seenPackages.add(packageName)) continue;
                 String label = String.valueOf(info.loadLabel(activity.getPackageManager()));
                 apps.add(packageName + "\t" + label);
             }
