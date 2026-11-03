@@ -19,8 +19,8 @@ namespace CardboardXR.Demos.Desktop
         const string k_Gemini = "https://gemini.google.com/app";
         const string k_LastKey = "CardboardXR.WebLast";
         const float k_PixelsPerMeter = 5000f;
-        const int k_PageWidth = 1280;
-        const int k_PageHeight = 720;
+        const int k_PageWidth = 960;
+        const int k_PageHeight = 540;
 
         CoreServices m_Core;
         FloatingScreen m_Screen;
