@@ -52,7 +52,7 @@ public final class GlassesWebViewBridge {
     private static int height;
     private static volatile boolean loading;
     private static final Object frameLock = new Object();
-    private static final int CAPTURE_INTERVAL_MS = 50;
+    private static final int CAPTURE_INTERVAL_MS = 33;
 
     private GlassesWebViewBridge() { }
 
@@ -180,12 +180,18 @@ public final class GlassesWebViewBridge {
                 int sourceY = height - 1 - y;
                 int source = base + sourceY * rowStride;
                 int target = y * width * 4;
-                for (int x = 0; x < width; x++) {
-                    int pixel = source + x * pixelStride;
-                    rgba[target++] = pixels.get(pixel);
-                    rgba[target++] = pixels.get(pixel + 1);
-                    rgba[target++] = pixels.get(pixel + 2);
-                    rgba[target++] = pixels.get(pixel + 3);
+                if (pixelStride == 4 && rowStride >= width * 4) {
+                    ByteBuffer row = pixels.duplicate();
+                    row.position(source);
+                    row.get(rgba, target, width * 4);
+                } else {
+                    for (int x = 0; x < width; x++) {
+                        int pixel = source + x * pixelStride;
+                        rgba[target++] = pixels.get(pixel);
+                        rgba[target++] = pixels.get(pixel + 1);
+                        rgba[target++] = pixels.get(pixel + 2);
+                        rgba[target++] = pixels.get(pixel + 3);
+                    }
                 }
             }
             synchronized (frameLock) { latestRgba = rgba; frameNumber++; }
@@ -381,7 +387,9 @@ public final class GlassesWebViewBridge {
         synchronized (frameLock) {
             if (latestRgba == null || copiedFrameNumber == frameNumber) return null;
             copiedFrameNumber = frameNumber;
-            return latestRgba.clone();
+            // The published frame is immutable; the next capture replaces the array rather than
+            // modifying it. Returning it directly avoids an additional full-frame Java copy.
+            return latestRgba;
         }
     }
 
