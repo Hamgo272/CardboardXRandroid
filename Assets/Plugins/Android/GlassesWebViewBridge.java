@@ -216,6 +216,49 @@ public final class GlassesWebViewBridge {
         }, null);
     }
 
+    /** Saves a captured camera frame to MediaStore and opens Android's visual-search/share chooser. */
+    public static void shareImage(final byte[] jpeg) {
+        onUiThread(() -> {
+            if (activity == null || jpeg == null || jpeg.length == 0) return null;
+            if (android.os.Build.VERSION.SDK_INT < 29) {
+                android.util.Log.w("CardboardXR.VisualSearch", "Visual search sharing requires Android 10 or newer");
+                return null;
+            }
+            android.net.Uri imageUri = null;
+            try {
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                        "CardboardXR-visual-search-" + System.currentTimeMillis() + ".jpg");
+                values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                values.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                        android.os.Environment.DIRECTORY_PICTURES + "/CardboardXR");
+                imageUri = activity.getContentResolver().insert(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                if (imageUri == null) throw new IllegalStateException("Couldn't create image entry");
+                try (java.io.OutputStream output = activity.getContentResolver().openOutputStream(imageUri)) {
+                    if (output == null) throw new IllegalStateException("Couldn't open image output");
+                    output.write(jpeg);
+                    output.flush();
+                }
+
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("image/jpeg");
+                send.putExtra(Intent.EXTRA_STREAM, imageUri);
+                send.setClipData(android.content.ClipData.newUri(
+                        activity.getContentResolver(), "What I'm looking at", imageUri));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                activity.startActivity(Intent.createChooser(send, "Search this image"));
+            } catch (Exception e) {
+                if (imageUri != null) {
+                    try { activity.getContentResolver().delete(imageUri, null, null); }
+                    catch (Exception ignored) { }
+                }
+                android.util.Log.e("CardboardXR.VisualSearch", "Couldn't share camera image", e);
+            }
+            return null;
+        }, null);
+    }
+
     /** Short confirmation pulse for gaze, pinch and toolbar actions. */
     public static void vibrate(final int durationMs) {
         onUiThread(() -> {
