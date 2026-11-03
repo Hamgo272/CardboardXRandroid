@@ -3,8 +3,8 @@ using UnityEngine;
 
 namespace CardboardXR.Demos.Desktop
 {
-    // Browser pages are drawn into a texture. Android WebView cannot capture video layers, so video
-    // URLs are handed to an installed native app/browser rather than showing a black player rectangle.
+    // Browser pages are drawn into a texture. Keep video URLs in the in-app browser so the page
+    // remains on the floating VR screen instead of launching another app.
     public class WebDemo : Demo, IPinchHandler
     {
         [Tooltip("Unlit material the screen's parts are made from.")]
@@ -122,18 +122,12 @@ namespace CardboardXR.Demos.Desktop
             url = url?.Trim();
             if (string.IsNullOrEmpty(url))
                 return;
-            if (IsVideoPage(url) && m_Web.OpenExternal(url))
-            {
-                PlayerPrefs.SetString(k_LastKey, url);
-                m_StatusMessage = "Video opened in the installed app/browser. Return to CardboardXR to continue.";
-                m_StatusUntil = Time.unscaledTime + 12f;
-                return;
-            }
+
             PlayerPrefs.SetString(k_LastKey, url);
             m_Web.Load(url);
             if (IsVideoPage(url))
             {
-                m_StatusMessage = "This Android WebView cannot capture video playback. Install a video app, or use Computer Screen.";
+                m_StatusMessage = "Opening video in the VR browser...";
                 m_StatusUntil = Time.unscaledTime + 12f;
             }
             else

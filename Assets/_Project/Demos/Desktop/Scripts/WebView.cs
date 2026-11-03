@@ -36,7 +36,6 @@ namespace CardboardXR.Demos.Desktop
         static void GlassesWeb_Load(string url) => Bridge.CallStatic("load", url);
         static void GlassesWeb_Eval(string script) => Bridge.CallStatic("evaluate", script);
         static void GlassesWeb_Tap(float x, float y) => Bridge.CallStatic("tap", x, y);
-        static bool GlassesWeb_OpenExternal(string url) => Bridge.CallStatic<bool>("openExternal", url);
         static void GlassesWeb_Back() => Bridge.CallStatic("back");
         static void GlassesWeb_Reload() => Bridge.CallStatic("reload");
         static int GlassesWeb_IsLoading() => Bridge.CallStatic<bool>("isLoading") ? 1 : 0;
@@ -109,17 +108,6 @@ namespace CardboardXR.Demos.Desktop
         {
             Debug.Log($"[Web] Open {url}");
             GlassesWeb_Load(url);
-        }
-
-        // Video in an Android WebView is often rendered in a separate protected/hardware surface,
-        // which cannot be copied into the browser texture. Hand it off to the installed video app/browser.
-        public bool OpenExternal(string url)
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            return GlassesWeb_OpenExternal(url);
-#else
-            return false;
-#endif
         }
 
         public void Back() => GlassesWeb_Back();
