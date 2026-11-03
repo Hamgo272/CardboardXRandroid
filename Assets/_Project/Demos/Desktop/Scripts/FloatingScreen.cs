@@ -369,7 +369,10 @@ namespace CardboardXR.Demos.Desktop
             }
             part.transform.SetParent(m_Root, false);
             material = new Material(m_Template) { color = color };
-            part.GetComponent<MeshRenderer>().sharedMaterial = material;
+            var renderer = part.GetComponent<MeshRenderer>();
+            if (renderer == null)
+                renderer = part.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
             return part.transform;
         }
 
