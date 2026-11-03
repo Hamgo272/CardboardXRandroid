@@ -26,6 +26,8 @@ namespace CardboardXR.Demos.Desktop
         Vector2 m_Cursor = new(0.5f, 0.5f);
         string m_StatusMessage;
         float m_StatusUntil;
+        bool m_WaitingForVoice;
+        bool m_ListeningForVoice;
 
         public override void OnDemoEnter(CoreServices core)
         {
@@ -45,6 +47,8 @@ namespace CardboardXR.Demos.Desktop
             m_Screen.AddButton("Reload", () => m_Web.Reload(), "refresh");
             m_Screen.AddButton("Keys", ToggleKeys, "touch_app");
             m_Screen.AddButton("Search", OpenKeyboard, "edit");
+            m_Screen.AddButton("Voice", StartVoiceSearch, "front_hand");
+            m_Screen.AddButton("Full Video", () => m_Web.ToggleVideoFullscreen(), "aspect_ratio");
             m_Keys = new SurfaceKeyboard(core.Boundary.transform, m_Material)
             {
                 Text = t => m_Web.InsertText(t),
@@ -75,6 +79,7 @@ namespace CardboardXR.Demos.Desktop
             if (m_Screen == null)
                 return;
             m_Web.Update();
+            UpdateVoiceSearch();
             m_Screen.Interactive = m_Web.HasFrame;
             var status = Time.unscaledTime < m_StatusUntil ? m_StatusMessage : "Loading...";
             m_Screen.Show(m_Web.HasFrame ? m_Web.Texture : null, m_Web.Aspect, status);
@@ -107,6 +112,36 @@ namespace CardboardXR.Demos.Desktop
                     "Address or search the web");
         }
 
+        void StartVoiceSearch()
+        {
+            m_Keys?.Hide();
+            m_WaitingForVoice = true;
+            m_ListeningForVoice = m_Web.StartVoiceSearch();
+            m_StatusMessage = m_ListeningForVoice ? "Listening..." : "Allow microphone access to use voice search";
+            m_StatusUntil = Time.unscaledTime + 8f;
+        }
+
+        void UpdateVoiceSearch()
+        {
+            if (!m_WaitingForVoice)
+                return;
+            if (!m_ListeningForVoice && m_Web.HasMicrophonePermission)
+            {
+                m_ListeningForVoice = m_Web.StartVoiceSearch();
+                if (m_ListeningForVoice)
+                {
+                    m_StatusMessage = "Listening...";
+                    m_StatusUntil = Time.unscaledTime + 8f;
+                }
+            }
+            var query = m_Web.ConsumeVoiceResult();
+            if (string.IsNullOrWhiteSpace(query))
+                return;
+            m_WaitingForVoice = false;
+            m_ListeningForVoice = false;
+            Search(query.Trim());
+        }
+
         void Submit(string text)
         {
             text = text.Trim();
@@ -117,7 +152,16 @@ namespace CardboardXR.Demos.Desktop
             else if (!text.Contains(" ") && text.Contains(".") && !text.EndsWith("."))
                 Open("https://" + text);
             else
-                Open("https://www.google.com/search?q=" + Uri.EscapeDataString(text));
+                Search(text);
+        }
+
+        void Search(string query)
+        {
+            var encoded = Uri.EscapeDataString(query);
+            var lastPage = PlayerPrefs.GetString(k_LastKey, k_Home);
+            Open(IsYouTubePage(lastPage)
+                ? "https://www.youtube.com/results?search_query=" + encoded
+                : "https://www.google.com/search?q=" + encoded);
         }
 
         void Open(string url)
@@ -147,6 +191,10 @@ namespace CardboardXR.Demos.Desktop
             var lower = url.ToLowerInvariant();
             return lower.Contains("youtube.com") || lower.Contains("youtu.be") || lower.Contains("vimeo.com") || lower.Contains("twitch.tv");
         }
+
+        static bool IsYouTubePage(string url) => !string.IsNullOrEmpty(url) &&
+            (url.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+             url.Contains("youtu.be", StringComparison.OrdinalIgnoreCase));
 
         public bool TryBeginPinch(GameObject gazeTarget, PinchSource source) =>
             m_Screen != null && (m_Keys.TryBeginPinch(m_Core.Head) || m_Screen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker));

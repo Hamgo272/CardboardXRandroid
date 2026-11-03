@@ -44,6 +44,8 @@ namespace CardboardXR.Stereo
         [SerializeField] M3Button m_Toggle;
         [Tooltip("How far in front of the camera the image is shown without a focus. It's one flat image, so everything in it appears at this depth.")]
         [SerializeField] float m_Distance = 2f;
+        [Tooltip("Uses the fused, predicted head pose for the displayed camera image. This removes the visible shake caused by the raw AR camera pose updating only when a camera frame arrives.")]
+        [SerializeField] bool m_StabilizeView = true;
         [Tooltip("Height of the passthrough texture in pixels; its width follows the camera image's shape.")]
         [SerializeField] int m_TextureHeight = 720;
 
@@ -85,6 +87,10 @@ namespace CardboardXR.Stereo
             m_PoseDriver = m_ArCamera.GetComponent<TrackedPoseDriver>();
             m_ShownDistance = m_Distance;
         }
+
+        void OnEnable() => Application.onBeforeRender += RefreshScreenPose;
+
+        void OnDisable() => Application.onBeforeRender -= RefreshScreenPose;
 
         // After the other components' OnEnable, so the mode set here sticks.
         void Start()
@@ -378,9 +384,22 @@ namespace CardboardXR.Stereo
             var target = Mathf.Clamp(m_FocusDistance ?? m_Distance, k_MinDistance, m_Distance);
             var step = 1f - Mathf.Exp(-Time.unscaledDeltaTime / k_FocusSeconds);
             m_ShownDistance = Mathf.Exp(Mathf.Lerp(Mathf.Log(m_ShownDistance), Mathf.Log(target), step));
+            RefreshScreenPose();
+        }
+
+        // The camera image and its raw AR pose arrive together at about 30 Hz. The rendered head is
+        // updated again immediately before display from the IMU and the pose filter. Drawing the
+        // image at that fused pose makes it move with the rest of the view instead of stepping at the
+        // camera cadence. The source image is still the same unmodified AR camera frame.
+        void RefreshScreenPose()
+        {
+            if (!m_On || !m_HasImage || m_Screen == null)
+                return;
             var d = m_ShownDistance;
+            var local = new Vector3(m_FrustumCenter.x * d, m_FrustumCenter.y * d, d);
+            var pose = m_StabilizeView && m_Fusion != null ? m_Fusion.transform : m_ArCamera.transform;
             var screen = m_Screen.transform;
-            screen.SetLocalPositionAndRotation(new Vector3(m_FrustumCenter.x * d, m_FrustumCenter.y * d, d), Quaternion.identity);
+            screen.SetPositionAndRotation(pose.TransformPoint(local), pose.rotation);
             screen.localScale = new Vector3(m_FrustumSize.x * d, m_FrustumSize.y * d, 1f);
         }
     }

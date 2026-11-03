@@ -2,6 +2,9 @@ using System;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using UnityEngine;
+#if UNITY_ANDROID && !UNITY_EDITOR
+using UnityEngine.Android;
+#endif
 
 namespace CardboardXR.Demos.Desktop
 {
@@ -18,6 +21,8 @@ namespace CardboardXR.Demos.Desktop
         [DllImport("__Internal")] static extern int GlassesWeb_IsLoading();
         [DllImport("__Internal")] static extern int GlassesWeb_CopyFrame(byte[] buffer, int length, int lastFrame);
         [DllImport("__Internal")] static extern void GlassesWeb_Destroy();
+        static void GlassesWeb_StartVoiceSearch() { }
+        static string GlassesWeb_ConsumeVoiceResult() => null;
         public static bool Supported => true;
 #elif UNITY_ANDROID && !UNITY_EDITOR
         static AndroidJavaClass s_Bridge;
@@ -38,6 +43,8 @@ namespace CardboardXR.Demos.Desktop
         static void GlassesWeb_Tap(float x, float y) => Bridge.CallStatic("tap", x, y);
         static void GlassesWeb_Back() => Bridge.CallStatic("back");
         static void GlassesWeb_Reload() => Bridge.CallStatic("reload");
+        static void GlassesWeb_StartVoiceSearch() => Bridge.CallStatic("startVoiceSearch");
+        static string GlassesWeb_ConsumeVoiceResult() => Bridge.CallStatic<string>("consumeVoiceResult");
         static int GlassesWeb_IsLoading() => Bridge.CallStatic<bool>("isLoading") ? 1 : 0;
         static byte[] GlassesWeb_CopyFrame() => Bridge.CallStatic<byte[]>("copyFrame");
         static void GlassesWeb_Destroy()
@@ -55,6 +62,8 @@ namespace CardboardXR.Demos.Desktop
         static void GlassesWeb_Eval(string script) { }
         static void GlassesWeb_Back() { }
         static void GlassesWeb_Reload() { }
+        static void GlassesWeb_StartVoiceSearch() { }
+        static string GlassesWeb_ConsumeVoiceResult() => null;
         static int GlassesWeb_IsLoading() => 0;
         static int GlassesWeb_CopyFrame(byte[] buffer, int length, int lastFrame) => -1;
         static byte[] GlassesWeb_CopyFrame() => null;
@@ -84,6 +93,11 @@ namespace CardboardXR.Demos.Desktop
             "e.dispatchEvent(new KeyboardEvent('keydown',o));e.dispatchEvent(new KeyboardEvent('keyup',o));" +
             "if(e.tagName=='TEXTAREA'||e.isContentEditable){document.execCommand('insertLineBreak');return;}" +
             "if(e.form){if(e.form.requestSubmit)e.form.requestSubmit();else e.form.submit();}})()";
+        const string k_FullVideo =
+            "(function(){var v=document.querySelector('video');if(!v)return;var s='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;z-index:2147483647!important;background:#000!important;object-fit:contain!important;';" +
+            "if(v.dataset.cardboardFill){v.style.cssText=v.dataset.cardboardFill;delete v.dataset.cardboardFill;document.documentElement.style.overflow='';document.body.style.overflow='';return;}" +
+            "v.dataset.cardboardFill=v.style.cssText;v.style.cssText+=s;document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';" +
+            "var f=v.requestFullscreen||v.webkitRequestFullscreen;if(f)f.call(v).catch(function(){});if(v.play)v.play().catch(function(){});})()";
 
         readonly int m_Width;
         readonly int m_Height;
@@ -91,12 +105,24 @@ namespace CardboardXR.Demos.Desktop
         int m_Frame = -1;
         Vector2 m_ScrollPoint;
         float m_PendingScroll;
+        float m_ScrollRemainder;
         float m_LastScrollSent = -1f;
 
         public Texture2D Texture { get; }
         public bool HasFrame => m_Frame > 0;
         public bool IsLoading => GlassesWeb_IsLoading() != 0;
         public float Aspect => (float)m_Height / m_Width;
+        public bool HasMicrophonePermission
+        {
+            get
+            {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                return Permission.HasUserAuthorizedPermission(Permission.Microphone);
+#else
+                return false;
+#endif
+            }
+        }
 
         public WebView(int width, int height)
         {
@@ -130,12 +156,34 @@ namespace CardboardXR.Demos.Desktop
         public void Scroll(Vector2 point, float pixels)
         {
             m_ScrollPoint = point;
-            m_PendingScroll += pixels;
+            m_ScrollRemainder += pixels;
+            if (Mathf.Abs(m_ScrollRemainder) < 16f)
+                return;
+            m_PendingScroll += m_ScrollRemainder;
+            m_ScrollRemainder = 0f;
         }
         public void Type(string text) => GlassesWeb_Eval(Fill(k_Type, Quote(text)));
         public void InsertText(string text) => GlassesWeb_Eval(Fill(k_Insert, Quote(text)));
         public void Backspace() => GlassesWeb_Eval(k_Delete);
         public void Enter() => GlassesWeb_Eval(k_Enter);
+        public void ToggleVideoFullscreen() => GlassesWeb_Eval(k_FullVideo);
+
+        public bool StartVoiceSearch()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (!Permission.HasUserAuthorizedPermission(Permission.Microphone))
+            {
+                Permission.RequestUserPermission(Permission.Microphone);
+                return false;
+            }
+            GlassesWeb_StartVoiceSearch();
+            return true;
+#else
+            return false;
+#endif
+        }
+
+        public string ConsumeVoiceResult() => GlassesWeb_ConsumeVoiceResult();
 
         static string Quote(string text) => "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
         static string Fill(string script, params string[] values)
@@ -168,13 +216,13 @@ namespace CardboardXR.Demos.Desktop
 
         void FlushScroll()
         {
-            if (Mathf.Abs(m_PendingScroll) < 0.5f)
+            if (Mathf.Abs(m_PendingScroll) < 1f)
                 return;
             var now = Time.unscaledTime;
-            if (m_LastScrollSent >= 0f && now - m_LastScrollSent < 0.025f)
+            if (m_LastScrollSent >= 0f && now - m_LastScrollSent < 0.05f)
                 return;
-            var pixels = m_PendingScroll;
-            m_PendingScroll = 0f;
+            var pixels = Mathf.Clamp(m_PendingScroll, -220f, 220f);
+            m_PendingScroll -= pixels;
             m_LastScrollSent = now;
             GlassesWeb_Eval(Fill(k_Scroll, Number(m_ScrollPoint.x * m_Width), Number(m_ScrollPoint.y * m_Height), Number(pixels)));
         }
@@ -182,6 +230,7 @@ namespace CardboardXR.Demos.Desktop
         public void Dispose()
         {
             m_PendingScroll = 0f;
+            m_ScrollRemainder = 0f;
             GlassesWeb_Destroy();
             UnityEngine.Object.Destroy(Texture);
         }

@@ -2,6 +2,8 @@ package com.glassesxr.cardboardxr;
 
 import android.app.Activity;
 import android.app.Presentation;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -11,6 +13,9 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.os.Handler;
 import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
@@ -24,6 +29,7 @@ import android.webkit.WebViewClient;
 import com.unity3d.player.UnityPlayer;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
@@ -35,6 +41,8 @@ public final class GlassesWebViewBridge {
     private static Presentation presentation;
     private static VirtualDisplay virtualDisplay;
     private static ImageReader imageReader;
+    private static SpeechRecognizer speechRecognizer;
+    private static String latestVoiceResult;
     private static Handler handler;
     private static Runnable captureTask;
     private static byte[] latestRgba;
@@ -110,7 +118,33 @@ public final class GlassesWebViewBridge {
                     android.util.Log.w("CardboardXR.Web", "Page load error: " + description);
                 }
             });
-            webView.setWebChromeClient(new WebChromeClient());
+            webView.setWebChromeClient(new WebChromeClient() {
+                private View fullScreenView;
+                private CustomViewCallback fullScreenCallback;
+
+                @Override public void onShowCustomView(View view, CustomViewCallback callback) {
+                    if (container == null || view == null) return;
+                    if (fullScreenView != null) {
+                        callback.onCustomViewHidden();
+                        return;
+                    }
+                    fullScreenView = view;
+                    fullScreenCallback = callback;
+                    container.removeAllViews();
+                    container.addView(view, new FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                }
+
+                @Override public void onHideCustomView() {
+                    if (container == null || fullScreenView == null) return;
+                    container.removeView(fullScreenView);
+                    fullScreenView = null;
+                    fullScreenCallback = null;
+                    if (webView != null)
+                        container.addView(webView, new FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                }
+            });
             container.addView(webView, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             presentation.setContentView(container);
@@ -188,6 +222,57 @@ public final class GlassesWebViewBridge {
     public static void evaluate(final String javascript) {
         onUiThread(() -> { if (webView != null && javascript != null) webView.evaluateJavascript(javascript, null); return null; }, null);
     }
+
+    /** Starts Android's system voice recognizer. Results are polled by Unity with consumeVoiceResult. */
+    public static void startVoiceSearch() {
+        onUiThread(() -> {
+            if (activity == null || activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                android.util.Log.w("CardboardXR.Web", "Microphone permission is required for voice search");
+                return null;
+            }
+            if (!SpeechRecognizer.isRecognitionAvailable(activity)) {
+                android.util.Log.w("CardboardXR.Web", "No speech recognizer is available on this device");
+                return null;
+            }
+            if (speechRecognizer != null) {
+                speechRecognizer.cancel();
+                speechRecognizer.destroy();
+            }
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(activity);
+            speechRecognizer.setRecognitionListener(new RecognitionListener() {
+                @Override public void onReadyForSpeech(android.os.Bundle params) { }
+                @Override public void onBeginningOfSpeech() { }
+                @Override public void onRmsChanged(float rmsdB) { }
+                @Override public void onBufferReceived(byte[] buffer) { }
+                @Override public void onEndOfSpeech() { }
+                @Override public void onError(int error) {
+                    android.util.Log.w("CardboardXR.Web", "Voice search ended: " + error);
+                }
+                @Override public void onResults(android.os.Bundle results) {
+                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (matches != null && !matches.isEmpty()) {
+                        synchronized (GlassesWebViewBridge.class) { latestVoiceResult = matches.get(0); }
+                    }
+                }
+                @Override public void onPartialResults(android.os.Bundle partialResults) { }
+                @Override public void onEvent(int eventType, android.os.Bundle params) { }
+            });
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            speechRecognizer.startListening(intent);
+            return null;
+        }, null);
+    }
+
+    public static String consumeVoiceResult() {
+        synchronized (GlassesWebViewBridge.class) {
+            String result = latestVoiceResult;
+            latestVoiceResult = null;
+            return result;
+        }
+    }
     public static void back() { onUiThread(() -> { if (webView != null && webView.canGoBack()) webView.goBack(); return null; }, null); }
     public static void reload() { onUiThread(() -> { if (webView != null) webView.reload(); return null; }, null); }
     public static boolean isLoading() { return loading; }
@@ -214,6 +299,11 @@ public final class GlassesWebViewBridge {
             webView.loadUrl("about:blank");
             webView.destroy();
             webView = null;
+        }
+        if (speechRecognizer != null) {
+            speechRecognizer.cancel();
+            speechRecognizer.destroy();
+            speechRecognizer = null;
         }
         container = null;
         if (virtualDisplay != null) { virtualDisplay.release(); virtualDisplay = null; }
