@@ -32,7 +32,7 @@ namespace CardboardXR.Demos.Desktop
         static readonly Color k_Toolbar = new(0.085f, 0.105f, 0.14f, 0.99f);
         static readonly Color k_Button = new(0.145f, 0.17f, 0.22f, 1f);
 
-        // Tap at a point; a held pinch (down, moves, up); scroll by hand travel in meters (up > 0).
+        // Tap at a point; a held pinch (down, moves, up); scroll in page pixels (up > 0).
         public Action<Vector2> Tap;
         public Action<Vector2> HoldDown;
         public Action<Vector2> HoldMove;

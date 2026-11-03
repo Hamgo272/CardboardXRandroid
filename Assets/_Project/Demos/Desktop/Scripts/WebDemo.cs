@@ -43,7 +43,7 @@ namespace CardboardXR.Demos.Desktop
             {
                 Tap = p => m_Web.Tap(p),
                 HoldUp = p => m_Web.Tap(p),
-                Scroll = (p, meters) => m_Web.Scroll(p, meters * k_PixelsPerMeter),
+                Scroll = (p, pixels) => m_Web.Scroll(p, pixels),
             };
             m_Screen.AddButton("Back", () => m_Web.Back(), "chevron_left");
             m_Screen.AddButton("Home", () => Open(k_Home), "home");
