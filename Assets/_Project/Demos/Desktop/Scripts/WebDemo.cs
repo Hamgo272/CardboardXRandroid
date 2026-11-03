@@ -1,6 +1,9 @@
 using System;
 using CardboardXR.Hands;
 using UnityEngine;
+using Unity.Collections;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
 
 namespace CardboardXR.Demos.Desktop
 {
@@ -46,6 +49,7 @@ namespace CardboardXR.Demos.Desktop
             m_Screen.AddButton("Home", () => Open(k_Home), "home");
             m_Screen.AddButton("YouTube", () => Open(k_YouTube), "movie");
             m_Screen.AddButton("Gemini", () => Open(k_Gemini), "auto_awesome");
+            m_Screen.AddButton("Visual Search", StartVisualSearch, "image_search");
             m_Screen.AddButton("Reload", () => m_Web.Reload(), "refresh");
             m_Screen.AddButton("Keys", ToggleKeys, "touch_app");
             m_Screen.AddButton("Search", OpenKeyboard, "edit");
@@ -112,6 +116,60 @@ namespace CardboardXR.Demos.Desktop
             if (m_Keyboard == null)
                 m_Keyboard = TouchScreenKeyboard.Open("", TouchScreenKeyboardType.URL, false, false, false, false,
                     "Address or search the web");
+        }
+
+        // Capture the live AR camera image and hand it to Android's image-share resolver.
+        // The user can choose Google Lens (if installed), Google, or another visual-search app.
+        void StartVisualSearch()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            var camera = UnityEngine.Object.FindFirstObjectByType<ARCameraManager>();
+            if (camera == null || !camera.TryAcquireLatestCpuImage(out var image))
+            {
+                m_StatusMessage = "Camera image unavailable. Enable 6DoF and camera access.";
+                m_StatusUntil = Time.unscaledTime + 5f;
+                return;
+            }
+
+            try
+            {
+                var dimensions = new Vector2Int(Mathf.Min(1280, image.width), Mathf.Min(1280, image.height));
+                var conversion = new XRCpuImage.ConversionParams
+                {
+                    inputRect = new RectInt(0, 0, image.width, image.height),
+                    outputDimensions = dimensions,
+                    outputFormat = TextureFormat.RGBA32,
+                    transformation = XRCpuImage.Transformation.MirrorY
+                };
+                var size = image.GetConvertedDataSize(conversion);
+                using (var pixels = new NativeArray<byte>(size, Allocator.Temp))
+                {
+                    image.Convert(conversion, pixels);
+                    var texture = new Texture2D(dimensions.x, dimensions.y, TextureFormat.RGBA32, false);
+                    texture.LoadRawTextureData(pixels);
+                    texture.Apply(false);
+                    var jpeg = texture.EncodeToJPG(82);
+                    UnityEngine.Object.Destroy(texture);
+                    using (var bridge = new AndroidJavaClass("com.glassesxr.cardboardxr.GlassesWebViewBridge"))
+                        bridge.CallStatic("shareImage", jpeg);
+                }
+                m_StatusMessage = "Choose Google Lens or another visual-search app.";
+                m_StatusUntil = Time.unscaledTime + 6f;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[VisualSearch] Camera capture/share failed: " + e.Message);
+                m_StatusMessage = "Visual search couldn't capture the camera image.";
+                m_StatusUntil = Time.unscaledTime + 5f;
+            }
+            finally
+            {
+                image.Dispose();
+            }
+#else
+            m_StatusMessage = "Visual search is available in the Android build.";
+            m_StatusUntil = Time.unscaledTime + 5f;
+#endif
         }
 
         void StartVoiceSearch()
