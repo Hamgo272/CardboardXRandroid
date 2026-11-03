@@ -22,6 +22,10 @@ namespace CardboardXR.Demos.Desktop
         const float k_MaxDistance = 10f;
         // Hand travel, in meters, that turns a pinch on the picture into scrolling.
         const float k_ScrollStart = 0.01f;
+        // Open-palm scrolling is a separate gesture from pinch-to-scroll and pinch-to-drag.
+        const float k_PalmScrollReach = 0.22f;
+        const float k_PalmScrollStart = 0.006f;
+        const float k_OpenPalmDistance = 0.075f;
         // A pinch held this long without scrolling becomes a drag.
         const float k_HoldTime = 0.35f;
         // Moving the pinched hand forward by 1 m pushes the screen this many meters away.
@@ -92,6 +96,8 @@ namespace CardboardXR.Demos.Desktop
         Vector2 m_PinchPoint;
         float m_MoveDistance;
         Vector3 m_GrabOffset;
+        bool m_PalmScrollActive;
+        Vector3 m_LastPalmScrollPoint;
 
         public FloatingScreen(string name, Transform room, Material material)
         {
@@ -208,6 +214,7 @@ namespace CardboardXR.Demos.Desktop
             }
 
             var hand = HandPoint(hands);
+            UpdatePalmScroll(head, hands);
             switch (m_Drag)
             {
                 case Drag.Pending:
@@ -262,6 +269,45 @@ namespace CardboardXR.Demos.Desktop
                     }
                     break;
             }
+        }
+
+        // A relaxed, open palm is a dedicated scroll gesture: hold it over the page and move
+        // vertically. This does not require pinching, and it is ignored while another screen
+        // interaction owns the hand.
+        void UpdatePalmScroll(Transform head, HandTracker hands)
+        {
+            if (m_Drag != Drag.None || hands == null || !hands.isActiveAndEnabled || !hands.IsTracking ||
+                hands.PinchDistance < k_OpenPalmDistance)
+            {
+                m_PalmScrollActive = false;
+                return;
+            }
+
+            var wrist = hands.Joints[HandGeometry.JointCount > 0 ? 0 : 0];
+            var local = m_Root.InverseTransformPoint(wrist);
+            var height = m_Width * m_Aspect;
+            var overPage = Mathf.Abs(local.z) <= k_PalmScrollReach &&
+                           Mathf.Abs(local.x) <= m_Width * 0.5f &&
+                           Mathf.Abs(local.y) <= height * 0.5f;
+            if (!overPage)
+            {
+                m_PalmScrollActive = false;
+                return;
+            }
+
+            if (!m_PalmScrollActive)
+            {
+                m_PalmScrollActive = true;
+                m_LastPalmScrollPoint = local;
+                return;
+            }
+
+            var delta = local.y - m_LastPalmScrollPoint.y;
+            m_LastPalmScrollPoint = local;
+            if (Mathf.Abs(delta) < k_PalmScrollStart)
+                return;
+            var point = new Vector2(local.x / m_Width + 0.5f, 0.5f - local.y / height);
+            Scroll?.Invoke(point, delta);
         }
 
         // ---------- pinches ----------
