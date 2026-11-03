@@ -20,12 +20,10 @@ namespace CardboardXR.Demos.Desktop
         const float k_MaxWidth = 12f;
         const float k_MinDistance = 0.5f;
         const float k_MaxDistance = 10f;
-        // Hand travel, in meters, that turns a pinch on the picture into scrolling.
-        const float k_ScrollStart = 0.01f;
-        // Pointing with the index finger (other fingers curled) scrolls. This is deliberately
-        // unlike the open, camera-facing palm used to summon Settings.
-        const float k_PointScrollReach = 0.22f;
-        const float k_PointScrollStart = 0.004f;
+        // A relaxed closed fist is a simple vertical swipe gesture, distinct from the open-palm
+        // Settings gesture and from the pinch used to click.
+        const float k_FistScrollReach = 0.28f;
+        const float k_FistScrollStart = 0.003f;
         // A pinch held this long without scrolling becomes a drag.
         const float k_HoldTime = 0.35f;
         // Moving the pinched hand forward by 1 m pushes the screen this many meters away.
@@ -67,7 +65,6 @@ namespace CardboardXR.Demos.Desktop
             None,
             Pending,
             Hold,
-            Scroll,
             Move,
             Resize,
         }
@@ -96,8 +93,8 @@ namespace CardboardXR.Demos.Desktop
         Vector2 m_PinchPoint;
         float m_MoveDistance;
         Vector3 m_GrabOffset;
-        bool m_PalmScrollActive;
-        Vector3 m_LastPalmScrollPoint;
+        bool m_FistScrollActive;
+        Vector3 m_LastFistScrollPoint;
 
         public FloatingScreen(string name, Transform room, Material material)
         {
@@ -214,17 +211,12 @@ namespace CardboardXR.Demos.Desktop
             }
 
             var hand = HandPoint(hands);
-            UpdatePalmScroll(head, hands);
+            UpdateFistScroll(hands);
             switch (m_Drag)
             {
                 case Drag.Pending:
-                    if (m_Source == PinchSource.Hand && hands != null && hands.IsTracking &&
-                        Mathf.Abs(Vector3.Dot(hand - m_HandStart, Vector3.up)) > k_ScrollStart)
-                    {
-                        m_Drag = Drag.Scroll;
-                        m_LastHand = m_HandStart;
-                    }
-                    else if (Time.unscaledTime - m_PinchStart > k_HoldTime)
+                    // Pinch is exclusively for clicking/holding. It never transitions into scrolling.
+                    if (Time.unscaledTime - m_PinchStart > k_HoldTime)
                     {
                         m_Drag = Drag.Hold;
                         HoldDown?.Invoke(m_PinchPoint);
@@ -234,17 +226,6 @@ namespace CardboardXR.Demos.Desktop
                     var point = PicturePoint(gaze);
                     if (point.HasValue)
                         HoldMove?.Invoke(point.Value);
-                    break;
-                case Drag.Scroll:
-                    if (hands == null || !hands.IsTracking)
-                    {
-                        m_Drag = Drag.None;
-                    }
-                    else
-                    {
-                        Scroll?.Invoke(m_PinchPoint, Vector3.Dot(hand - m_LastHand, Vector3.up));
-                        m_LastHand = hand;
-                    }
                     break;
                 case Drag.Move:
                     if (m_Source == PinchSource.Hand && hands.IsTracking)
@@ -271,56 +252,53 @@ namespace CardboardXR.Demos.Desktop
             }
         }
 
-        // Point-and-scroll: extend the index finger, curl the other three fingers, then
-        // move the fingertip vertically over the browser. An open palm never activates this,
-        // keeping it distinct from SettingsSummoner's palm-facing gesture.
-        void UpdatePalmScroll(Transform head, HandTracker hands)
+        // Fist-and-swipe: close the four fingers, place the hand over the browser, and
+        // move it vertically. Open palm remains reserved for Settings; pinch remains click-only.
+        void UpdateFistScroll(HandTracker hands)
         {
-            if (m_Drag != Drag.None || hands == null || !hands.isActiveAndEnabled || !hands.IsTracking ||
-                !IsPointingGesture(hands.Joints))
+            if (m_Drag != Drag.None || hands == null || !hands.isActiveAndEnabled ||
+                !hands.IsTracking || !IsClosedFist(hands.Joints))
             {
-                m_PalmScrollActive = false;
+                m_FistScrollActive = false;
                 return;
             }
 
-            var fingertip = hands.Joints[HandGeometry.IndexTip];
-            var local = m_Root.InverseTransformPoint(fingertip);
+            var joints = hands.Joints;
+            var palm = (joints[0] + joints[5] + joints[9] + joints[13] + joints[17]) * 0.2f;
+            var local = m_Root.InverseTransformPoint(palm);
             var height = m_Width * m_Aspect;
-            var overPage = Mathf.Abs(local.z) <= k_PointScrollReach &&
+            var overPage = Mathf.Abs(local.z) <= k_FistScrollReach &&
                            Mathf.Abs(local.x) <= m_Width * 0.5f &&
                            Mathf.Abs(local.y) <= height * 0.5f;
             if (!overPage)
             {
-                m_PalmScrollActive = false;
+                m_FistScrollActive = false;
                 return;
             }
 
-            if (!m_PalmScrollActive)
+            if (!m_FistScrollActive)
             {
-                m_PalmScrollActive = true;
-                m_LastPalmScrollPoint = local;
+                m_FistScrollActive = true;
+                m_LastFistScrollPoint = local;
                 return;
             }
 
-            var delta = local.y - m_LastPalmScrollPoint.y;
-            m_LastPalmScrollPoint = local;
-            if (Mathf.Abs(delta) < k_PointScrollStart)
+            var delta = local.y - m_LastFistScrollPoint.y;
+            m_LastFistScrollPoint = local;
+            if (Mathf.Abs(delta) < k_FistScrollStart)
                 return;
             var point = new Vector2(local.x / m_Width + 0.5f, 0.5f - local.y / height);
             Scroll?.Invoke(point, delta);
         }
 
-        static bool IsPointingGesture(Vector3[] joints)
+        static bool IsClosedFist(Vector3[] joints)
         {
             if (joints == null || joints.Length < HandGeometry.JointCount)
                 return false;
             var wrist = joints[0];
-            bool Extended(int tip, int pip) =>
-                Vector3.Distance(joints[tip], wrist) > Vector3.Distance(joints[pip], wrist) * 1.12f;
             bool Curled(int tip, int pip) =>
                 Vector3.Distance(joints[tip], wrist) < Vector3.Distance(joints[pip], wrist) * 1.08f;
-            return Extended(HandGeometry.IndexTip, 6) &&
-                   Curled(12, 10) && Curled(16, 14) && Curled(20, 18);
+            return Curled(8, 6) && Curled(12, 10) && Curled(16, 14) && Curled(20, 18);
         }
 
         // ---------- pinches ----------
