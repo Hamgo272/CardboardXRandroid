@@ -2,11 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <application>
+    <application android:theme="@style/Theme.AppCompat.NoActionBar">
         <activity
             android:name="com.unity3d.player.UnityPlayerGameActivity"
             android:exported="true"
-            tools:replace="android:exported">
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            tools:replace="android:exported,android:theme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
