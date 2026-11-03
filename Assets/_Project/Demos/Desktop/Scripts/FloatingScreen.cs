@@ -214,6 +214,10 @@ namespace CardboardXR.Demos.Desktop
             }
 
             var hand = HandPoint(hands);
+            // If a scroll pose begins during a pending pinch, cancel the pending click before
+            // dispatching scroll. This prevents a scroll-to-click race on gesture transitions.
+            if (m_Drag == Drag.Pending && hands != null && IsTwoFingerScroll(hands.Joints))
+                m_Drag = Drag.None;
             UpdateTwoFingerScroll(hands);
             switch (m_Drag)
             {
@@ -315,6 +319,11 @@ namespace CardboardXR.Demos.Desktop
 
         public bool TryBeginPinch(Transform head, PinchSource source, HandTracker hands)
         {
+            // The two-finger scroll pose must never enter the pinch/click path.
+            // Check it here as well as during Update so the router cannot start a tap first.
+            if (source == PinchSource.Hand && hands != null && IsTwoFingerScroll(hands.Joints))
+                return false;
+
             var local = Hit(new Ray(head.position, head.forward));
             if (!local.HasValue)
                 return false;
