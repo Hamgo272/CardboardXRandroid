@@ -206,8 +206,8 @@ namespace CardboardXR.Demos.Desktop
             if (frame < 0)
                 return false;
             m_Frame = frame;
-#endif
             Texture.LoadRawTextureData(m_Buffer);
+#endif
             Texture.Apply(false);
             return true;
         }
