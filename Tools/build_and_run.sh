@@ -27,7 +27,7 @@ if pgrep -f "$U" >/dev/null; then echo "Unity is running; close the project in t
 
 echo "== prepare generated UI assets"
 rm -f $LOGS/material-assets.log
-$U -batchmode -projectPath $P -executeMethod ProjectBootstrap.MaterialAssets.Ensure -logFile $LOGS/material-assets.log || exit 1
+$U -batchmode -quit -projectPath $P -executeMethod ProjectBootstrap.MaterialAssets.Ensure -logFile $LOGS/material-assets.log || exit 1
 grep -E "\\[MaterialAssets\\]|error CS" $LOGS/material-assets.log | head -20
 
 echo "== EditMode tests"
