@@ -216,6 +216,41 @@ public final class GlassesWebViewBridge {
         }, null);
     }
 
+    /** Returns launchable installed apps as package-name + tab + display-label records. */
+    public static String[] getLaunchableApps() {
+        return onUiThread(() -> {
+            if (activity == null) return new String[0];
+            Intent query = new Intent(Intent.ACTION_MAIN, null);
+            query.addCategory(Intent.CATEGORY_LAUNCHER);
+            java.util.List<android.content.pm.ResolveInfo> matches =
+                    activity.getPackageManager().queryIntentActivities(query, 0);
+            java.util.Collections.sort(matches, (a, b) ->
+                    String.valueOf(a.loadLabel(activity.getPackageManager())).compareToIgnoreCase(
+                            String.valueOf(b.loadLabel(activity.getPackageManager()))));
+            java.util.ArrayList<String> apps = new java.util.ArrayList<>();
+            String ownPackage = activity.getPackageName();
+            for (android.content.pm.ResolveInfo info : matches) {
+                if (info.activityInfo == null || ownPackage.equals(info.activityInfo.packageName)) continue;
+                String packageName = info.activityInfo.packageName;
+                String label = String.valueOf(info.loadLabel(activity.getPackageManager()));
+                apps.add(packageName + "\t" + label);
+            }
+            return apps.toArray(new String[0]);
+        }, new String[0]);
+    }
+
+    /** Launches an explicitly selected installed app. */
+    public static boolean launchApp(final String packageName) {
+        return onUiThread(() -> {
+            if (activity == null || packageName == null || packageName.isEmpty()) return false;
+            Intent launch = activity.getPackageManager().getLaunchIntentForPackage(packageName);
+            if (launch == null) return false;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(launch);
+            return true;
+        }, false);
+    }
+
     public static void load(final String url) {
         onUiThread(() -> { if (webView != null && url != null) webView.loadUrl(url); return null; }, null);
     }
