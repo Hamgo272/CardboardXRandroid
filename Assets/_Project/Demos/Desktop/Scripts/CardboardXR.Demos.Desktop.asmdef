@@ -8,7 +8,9 @@
         "CardboardXR.Interaction",
         "CardboardXR.UI",
         "Unity.TextMeshPro",
-        "Unity.XR.ARFoundation"
+        "Unity.XR.ARFoundation",
+        "Unity.Collections",
+        "Unity.XR.ARSubsystems"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
