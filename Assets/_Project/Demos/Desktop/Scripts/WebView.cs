@@ -78,10 +78,12 @@ namespace CardboardXR.Demos.Desktop
             "t.indexOf('pointer')==0?new PointerEvent(t,o):new MouseEvent(t,o));}catch(_){}});" +
             "if(e.focus)e.focus();e.click();})({0},{1})";
         const string k_Scroll =
-            "(function(x,y,d){var e=document.elementFromPoint(x,y);while(e&&e!==document.documentElement){" +
-            "var s=getComputedStyle(e),o=s.overflowY,t=e.scrollTop,m=e.scrollHeight-e.clientHeight;" +
-            "if((o=='auto'||o=='scroll'||o=='overlay')&&m>1&&((d>0&&t<m-1)||(d<0&&t>1)))" +
-            "{e.scrollBy(0,d);return;}e=e.parentElement;}window.scrollBy(0,d);})({0},{1},{2})";
+            "(function(x,y,d){var e=document.elementFromPoint(x,y),root=document.scrollingElement||document.documentElement;" +
+            "while(e&&e!==document.documentElement){var s=getComputedStyle(e),o=s.overflowY,t=e.scrollTop,m=e.scrollHeight-e.clientHeight;" +
+            "if((o=='auto'||o=='scroll'||o=='overlay')&&m>1){var can=d>0?t<m-1:t>1;" +
+            "if(can){try{e.dispatchEvent(new WheelEvent('wheel',{deltaY:d,bubbles:true,cancelable:true,clientX:x,clientY:y}));}catch(_){}" +
+            "e.scrollBy(0,d);return;}if(s.overscrollBehaviorY=='contain'||s.overscrollBehaviorY=='none')return;}e=e.parentElement;}" +
+            "root.scrollBy(0,d);})({0},{1},{2})";
         const string k_Type =
             "(function(t){var e=document.activeElement;if(!e||!('value' in e))return;e.value=t;" +
             "e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));" +
@@ -157,7 +159,7 @@ namespace CardboardXR.Demos.Desktop
         {
             m_ScrollPoint = point;
             m_ScrollRemainder += pixels;
-            if (Mathf.Abs(m_ScrollRemainder) < 16f)
+            if (Mathf.Abs(m_ScrollRemainder) < 5f)
                 return;
             m_PendingScroll += m_ScrollRemainder;
             m_ScrollRemainder = 0f;
@@ -219,9 +221,9 @@ namespace CardboardXR.Demos.Desktop
             if (Mathf.Abs(m_PendingScroll) < 1f)
                 return;
             var now = Time.unscaledTime;
-            if (m_LastScrollSent >= 0f && now - m_LastScrollSent < 0.05f)
+            if (m_LastScrollSent >= 0f && now - m_LastScrollSent < 0.033f)
                 return;
-            var pixels = Mathf.Clamp(m_PendingScroll, -220f, 220f);
+            var pixels = Mathf.Clamp(m_PendingScroll, -320f, 320f);
             m_PendingScroll -= pixels;
             m_LastScrollSent = now;
             GlassesWeb_Eval(Fill(k_Scroll, Number(m_ScrollPoint.x * m_Width), Number(m_ScrollPoint.y * m_Height), Number(pixels)));
