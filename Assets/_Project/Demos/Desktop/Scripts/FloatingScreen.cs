@@ -8,10 +8,10 @@ using UnityEngine;
 namespace CardboardXR.Demos.Desktop
 {
     // A flat screen anchored in the room, like a visionOS window, for whatever a demo shows on it.
-    // Look at the picture and pinch to tap; pinch and move the hand up or down to scroll; hold a
-    // pinch to drag. The bar below moves the screen (it follows the gaze; moving the pinched hand
-    // forward or back pushes it away or pulls it closer); the corner resizes it to where you look.
-    // Buttons along the top run the demo's commands. Positions in the picture are 0..1, y down.
+    // A closed-fist vertical swipe scrolls the page; pinch is reserved for tapping and holding.
+    // The bar below moves the screen (it follows the gaze; moving the pinched hand forward or back
+    // pushes it away or pulls it closer); the corner resizes it to where you look. Toolbar buttons
+    // run the demo's commands. Positions in the picture are 0..1, y down.
     public class FloatingScreen
     {
         const float k_StartWidth = 1.2f;
