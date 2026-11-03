@@ -22,14 +22,14 @@ namespace CardboardXR.Demos
     public class AppLibrary : MonoBehaviour
     {
         // In dp: each app's cell, its icon tile, and the gaps between cells and around the grid.
-        public const float k_CellWidth = 128f;
+        public const float k_CellWidth = 144f;
         // Kept short, so it sits at eye level with the settings panel close below it.
-        public const float k_CellHeight = 124f;
-        const float k_IconSize = 72f;
-        const float k_IconRadius = 18f;
-        const float k_Gap = 8f;
-        const float k_Padding = 16f;
-        const float k_TaglineHeight = 28f;
+        public const float k_CellHeight = 140f;
+        const float k_IconSize = 80f;
+        const float k_IconRadius = 22f;
+        const float k_Gap = 12f;
+        const float k_Padding = 20f;
+        const float k_TaglineHeight = 36f;
         public const int k_Columns = 3;
         const string k_Prompt = "Look at an app to see what it is";
         // Picks this soon after the library appears are ignored: it opens where the user is looking,
@@ -223,6 +223,10 @@ namespace CardboardXR.Demos
             Action onPick)
         {
             var cell = M3.Group($"App {title}", m_Grid, CellPosition(index, size), new Vector2(k_CellWidth, k_CellHeight));
+            // Give every app a distinct card surface so the library reads as a launcher, not a
+            // loose collection of floating icons. Keep the state layer above it for gaze feedback.
+            M3.Surface("Card", cell, Vector2.zero, new Vector2(k_CellWidth - 6f, k_CellHeight - 6f),
+                M3Theme.SurfaceContainer, M3Theme.k_ShapeLarge);
             var state = M3.Surface("State Layer", cell, Vector2.zero, cell.sizeDelta, Color.clear, M3Theme.k_ShapeLarge,
                 raycastTarget: true);
             var button = cell.gameObject.AddComponent<Button>();
@@ -231,11 +235,11 @@ namespace CardboardXR.Demos
             button.onClick.AddListener(() => onPick?.Invoke());
             cell.gameObject.AddComponent<M3StateLayer>().Initialize(state, button, M3Theme.OnSurface);
 
-            var tile = M3.Surface("Icon Tile", cell, new Vector2(0f, 16f), new Vector2(k_IconSize, k_IconSize), tint, k_IconRadius);
-            M3.Icon("Icon", tile.rectTransform, icon, 40f, Vector2.zero, Color.white);
-            var name = M3.Text("Name", cell, title, M3Theme.Type.LabelLarge, new Vector2(0f, -36f), new Vector2(k_CellWidth - 8f, 20f));
+            var tile = M3.Surface("Icon Tile", cell, new Vector2(0f, 20f), new Vector2(k_IconSize, k_IconSize), tint, k_IconRadius);
+            M3.Icon("Icon", tile.rectTransform, icon, 44f, Vector2.zero, Color.white);
+            var name = M3.Text("Name", cell, title, M3Theme.Type.LabelLarge, new Vector2(0f, -42f), new Vector2(k_CellWidth - 16f, 22f));
             name.textWrappingMode = TextWrappingModes.NoWrap;
-            var running = M3.Surface("Running", cell, new Vector2(0f, -53f), new Vector2(6f, 6f), M3Theme.Primary, M3Theme.k_ShapeFull)
+            var running = M3.Surface("Running", cell, new Vector2(0f, -60f), new Vector2(7f, 7f), M3Theme.Primary, M3Theme.k_ShapeFull)
                 .gameObject;
             running.SetActive(false);
             cell.gameObject.AddComponent<AppTileGaze>().Initialize(m_Tagline, string.IsNullOrEmpty(tagline) ? title : tagline, k_Prompt);
