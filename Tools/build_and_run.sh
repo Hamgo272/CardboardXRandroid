@@ -13,13 +13,17 @@ set -u
 P=${0:A:h:h}
 # Another Unity 6000.6 install: UNITY=/path/to/Unity.app/Contents/MacOS/Unity zsh Tools/...
 U=${UNITY:-/Applications/Unity/Hub/Editor/6000.6.0f1/Unity.app/Contents/MacOS/Unity}
+# Normalize the configured executable path so the process check works on Linux as well as macOS.
+U=${U:A}
 # Another app id (an iOS bundle id belongs to the Apple team that first signed it):
 #   CARDBOARDXR_BUNDLE_ID=com.example.cardboardxr zsh Tools/...
 PKG=${CARDBOARDXR_BUNDLE_ID:-com.brenpoly.cardboardxr}
 LOGS=${TMPDIR:-/tmp}/cardboardxr
 mkdir -p $LOGS
 cd $P || exit 1
-if pgrep -f "Unity.app/Contents/MacOS/Unity" >/dev/null; then echo "Unity is running; close it first"; exit 1; fi
+# Match the actual executable supplied by UNITY. The old macOS-only pattern missed Linux
+# Editor/Unity processes and could let batchmode run alongside the GUI Editor.
+if pgrep -f "$U" >/dev/null; then echo "Unity is running; close the project in the Editor first"; exit 1; fi
 
 echo "== EditMode tests"
 rm -f $LOGS/tests.xml
