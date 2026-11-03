@@ -216,6 +216,26 @@ public final class GlassesWebViewBridge {
         }, null);
     }
 
+    /** Short confirmation pulse for gaze, pinch and toolbar actions. */
+    public static void vibrate(final int durationMs) {
+        onUiThread(() -> {
+            if (activity == null) return null;
+            try {
+                android.os.Vibrator vibrator = (android.os.Vibrator) activity.getSystemService(Activity.VIBRATOR_SERVICE);
+                if (vibrator != null && vibrator.hasVibrator()) {
+                    int duration = Math.max(8, Math.min(35, durationMs));
+                    if (android.os.Build.VERSION.SDK_INT >= 26)
+                        vibrator.vibrate(android.os.VibrationEffect.createOneShot(duration, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+                    else
+                        vibrator.vibrate(duration);
+                }
+            } catch (RuntimeException e) {
+                android.util.Log.w("CardboardXR.Haptics", "Vibration unavailable", e);
+            }
+            return null;
+        }, null);
+    }
+
     /** Returns launchable installed apps as package-name + tab + display-label records. */
     public static String[] getLaunchableApps() {
         return onUiThread(() -> {
