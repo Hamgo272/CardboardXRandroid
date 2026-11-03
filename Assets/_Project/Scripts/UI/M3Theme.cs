@@ -28,23 +28,24 @@ namespace CardboardXR.UI
         public static float DpToMeters(float dp, float distance) => dp * k_DpToDmm * 1e-3f * distance * CardboardScale;
 
         // Baseline dark scheme.
-        public static readonly Color Primary = Hex(0xD0BCFF);
-        public static readonly Color OnPrimary = Hex(0x381E72);
-        public static readonly Color PrimaryContainer = Hex(0x4F378B);
-        public static readonly Color OnPrimaryContainer = Hex(0xEADDFF);
-        public static readonly Color SecondaryContainer = Hex(0x4A4458);
-        public static readonly Color OnSecondaryContainer = Hex(0xE8DEF8);
-        public static readonly Color Surface = Hex(0x141218);
-        public static readonly Color SurfaceContainer = Hex(0x211F26);
-        public static readonly Color SurfaceContainerHigh = Hex(0x2B2930);
-        public static readonly Color SurfaceContainerHighest = Hex(0x36343B);
-        public static readonly Color OnSurface = Hex(0xE6E0E9);
-        public static readonly Color OnSurfaceVariant = Hex(0xCAC4D0);
-        public static readonly Color Outline = Hex(0x938F99);
-        public static readonly Color OutlineVariant = Hex(0x49454F);
-        public static readonly Color Error = Hex(0xF2B8B5);
-        public static readonly Color InverseSurface = Hex(0xE6E0E9);
-        public static readonly Color InverseOnSurface = Hex(0x322F35);
+        // Midnight XR palette: cool ink surfaces with a clear violet primary accent.
+        public static readonly Color Primary = Hex(0xB9A6FF);
+        public static readonly Color OnPrimary = Hex(0x25105C);
+        public static readonly Color PrimaryContainer = Hex(0x49377F);
+        public static readonly Color OnPrimaryContainer = Hex(0xEEE8FF);
+        public static readonly Color SecondaryContainer = Hex(0x293650);
+        public static readonly Color OnSecondaryContainer = Hex(0xDFE8FF);
+        public static readonly Color Surface = Hex(0x0B1020);
+        public static readonly Color SurfaceContainer = Hex(0x131B2D);
+        public static readonly Color SurfaceContainerHigh = Hex(0x1B2540);
+        public static readonly Color SurfaceContainerHighest = Hex(0x26314D);
+        public static readonly Color OnSurface = Hex(0xF1F3FF);
+        public static readonly Color OnSurfaceVariant = Hex(0xC3CBE0);
+        public static readonly Color Outline = Hex(0x8994B0);
+        public static readonly Color OutlineVariant = Hex(0x3A4662);
+        public static readonly Color Error = Hex(0xFFB4AB);
+        public static readonly Color InverseSurface = Hex(0xE1E6F7);
+        public static readonly Color InverseOnSurface = Hex(0x20283B);
 
         // State layers: the content color at these opacities over the container. Twice Material's 8% and
         // 10%: through a phone in a viewer, at about half a headset's pixels per degree, those were
@@ -57,11 +58,11 @@ namespace CardboardXR.UI
 
         // Corner radii, in dp. Full rounds a shape's shorter side.
         public const float k_ShapeFull = 1000f;
-        public const float k_ShapePanel = 32f;
-        public const float k_ShapeDialog = 28f;
-        public const float k_ShapeLarge = 16f;
-        public const float k_ShapeCard = 12f;
-        public const float k_ShapeSmall = 8f;
+        public const float k_ShapePanel = 28f;
+        public const float k_ShapeDialog = 24f;
+        public const float k_ShapeLarge = 20f;
+        public const float k_ShapeCard = 16f;
+        public const float k_ShapeSmall = 10f;
 
         // Spatial elevation, in dp toward the viewer.
         public const float k_ElevationOrbiter = 16f;
