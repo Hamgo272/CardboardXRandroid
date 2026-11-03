@@ -269,7 +269,7 @@ namespace CardboardXR.Demos.Desktop
             }
 
             var joints = hands.Joints;
-            var gesturePoint = (joints[HandGeometry.IndexTip] + joints[HandGeometry.MiddleTip]) * 0.5f;
+            var gesturePoint = (joints[HandGeometry.IndexTip] + joints[12]) * 0.5f;
             var local = m_Root.InverseTransformPoint(gesturePoint);
             var height = m_Width * m_Aspect;
             var overPage = Mathf.Abs(local.z) <= k_TwoFingerScrollReach &&
@@ -306,9 +306,9 @@ namespace CardboardXR.Demos.Desktop
             bool Curled(int tip, int pip) =>
                 Vector3.Distance(joints[tip], wrist) < Vector3.Distance(joints[pip], wrist) * 1.08f;
             return Extended(HandGeometry.IndexTip, 6) &&
-                   Extended(HandGeometry.MiddleTip, 10) &&
-                   Curled(HandGeometry.RingTip, 14) &&
-                   Curled(HandGeometry.LittleTip, 18);
+                   Extended(12, 10) &&
+                   Curled(16, 14) &&
+                   Curled(20, 18);
         }
 
         // ---------- pinches ----------
