@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CardboardXR.Hands;
+using CardboardXR.UI;
 using TMPro;
 using UnityEngine;
 
@@ -20,18 +21,18 @@ namespace CardboardXR.Demos.Desktop
         const float k_MinDistance = 0.5f;
         const float k_MaxDistance = 10f;
         // Hand travel, in meters, that turns a pinch on the picture into scrolling.
-        const float k_ScrollStart = 0.02f;
+        const float k_ScrollStart = 0.01f;
         // A pinch held this long without scrolling becomes a drag.
         const float k_HoldTime = 0.35f;
         // Moving the pinched hand forward by 1 m pushes the screen this many meters away.
         const float k_PushGain = 3f;
         // Gaze slack around handles and buttons, in meters.
         const float k_Pad = 0.03f;
-        const float k_ButtonHeight = 0.07f;
 
         static readonly Color k_Handle = new(0.72f, 0.72f, 0.76f);
         static readonly Color k_Hot = new(0.35f, 0.8f, 1f);
         static readonly Color k_Backing = new(0.07f, 0.07f, 0.09f);
+        static readonly Color k_Toolbar = new(0.09f, 0.1f, 0.13f);
         static readonly Color k_Button = new(0.18f, 0.18f, 0.22f);
 
         // Tap at a point; a held pinch (down, moves, up); scroll by hand travel in meters (up > 0).
@@ -51,7 +52,10 @@ namespace CardboardXR.Demos.Desktop
         {
             public Transform Part;
             public Material Material;
+            public TextMeshPro Icon;
+            public TextMeshPro Label;
             public Action Click;
+            public bool HasIcon;
         }
 
         enum Drag
@@ -68,6 +72,7 @@ namespace CardboardXR.Demos.Desktop
         readonly Transform m_Root;
         readonly Transform m_Content;
         readonly Transform m_Backing;
+        readonly Transform m_Toolbar;
         readonly Transform m_Bar;
         readonly Transform m_Corner;
         readonly Material m_ContentMaterial;
@@ -95,6 +100,7 @@ namespace CardboardXR.Demos.Desktop
             m_Root.SetParent(room, false);
             m_Backing = Part("Backing", k_Backing, out _);
             m_Content = Part("Content", k_Backing, out m_ContentMaterial);
+            m_Toolbar = Part("Toolbar", k_Toolbar, out _);
             m_Bar = Part("Move Bar", k_Handle, out m_BarMaterial);
             m_Corner = Part("Resize Handle", k_Handle, out m_CornerMaterial);
             m_Cursor = Part("Cursor", Color.white, out _);
@@ -108,14 +114,34 @@ namespace CardboardXR.Demos.Desktop
 
         public void Destroy() => UnityEngine.Object.Destroy(m_Root.gameObject);
 
-        public void AddButton(string label, Action click)
+        public void AddButton(string label, Action click, string icon = null)
         {
             var part = Part("Button " + label, k_Button, out var material);
-            var text = Text(part, "Label");
-            text.text = label;
-            text.fontSize = 0.35f;
-            // The button quad is scaled; undo it for the text.
-            m_Buttons.Add(new Button { Part = part, Material = material, Click = click });
+            var iconText = Text(part, "Icon");
+            var labelText = Text(part, "Label");
+            var assets = M3Assets.Instance;
+            var glyph = M3Icons.Glyph(icon);
+            var hasIcon = assets != null && assets.Icons != null && !string.IsNullOrEmpty(glyph) &&
+                          M3Icons.Codepoints.TryGetValue(icon, out var codepoint) &&
+                          assets.Icons.characterLookupTable.ContainsKey((uint)codepoint);
+            if (assets != null)
+            {
+                if (assets.Icons != null)
+                    iconText.font = assets.Icons;
+                if (assets.Medium != null)
+                    labelText.font = assets.Medium;
+            }
+            m_Buttons.Add(new Button
+            {
+                Part = part,
+                Material = material,
+                Icon = iconText,
+                Label = labelText,
+                Click = click,
+                HasIcon = hasIcon,
+            });
+            iconText.text = glyph;
+            labelText.text = label;
             Layout();
         }
 
@@ -171,19 +197,25 @@ namespace CardboardXR.Demos.Desktop
         {
             var gaze = Hit(new Ray(head.position, head.forward));
             var idle = m_Drag == Drag.None && gaze.HasValue;
+            var hoveredButton = idle ? NearestButton(gaze.Value) : null;
             m_BarMaterial.color = m_Drag == Drag.Move || (idle && Over(m_Bar, gaze.Value)) ? k_Hot : k_Handle;
             m_CornerMaterial.color = m_Drag == Drag.Resize || (idle && Over(m_Corner, gaze.Value)) ? k_Hot : k_Handle;
             foreach (var button in m_Buttons)
-                button.Material.color = idle && Over(button.Part, gaze.Value) ? k_Hot : k_Button;
+            {
+                var hot = button == hoveredButton;
+                button.Material.color = hot ? k_Hot : k_Button;
+                button.Icon.color = button.Label.color = hot ? k_Backing : Color.white;
+            }
 
             var hand = HandPoint(hands);
             switch (m_Drag)
             {
                 case Drag.Pending:
-                    if (m_Source == PinchSource.Hand && Mathf.Abs(Vector3.Dot(hand - m_HandStart, Vector3.up)) > k_ScrollStart)
+                    if (m_Source == PinchSource.Hand && hands != null && hands.IsTracking &&
+                        Mathf.Abs(Vector3.Dot(hand - m_HandStart, Vector3.up)) > k_ScrollStart)
                     {
                         m_Drag = Drag.Scroll;
-                        m_LastHand = hand;
+                        m_LastHand = m_HandStart;
                     }
                     else if (Time.unscaledTime - m_PinchStart > k_HoldTime)
                     {
@@ -197,8 +229,15 @@ namespace CardboardXR.Demos.Desktop
                         HoldMove?.Invoke(point.Value);
                     break;
                 case Drag.Scroll:
-                    Scroll?.Invoke(m_PinchPoint, Vector3.Dot(hand - m_LastHand, Vector3.up));
-                    m_LastHand = hand;
+                    if (hands == null || !hands.IsTracking)
+                    {
+                        m_Drag = Drag.None;
+                    }
+                    else
+                    {
+                        Scroll?.Invoke(m_PinchPoint, Vector3.Dot(hand - m_LastHand, Vector3.up));
+                        m_LastHand = hand;
+                    }
                     break;
                 case Drag.Move:
                     if (m_Source == PinchSource.Hand && hands.IsTracking)
@@ -236,10 +275,9 @@ namespace CardboardXR.Demos.Desktop
             m_PinchStart = Time.unscaledTime;
             m_HandStart = m_LastHand = HandPoint(hands);
 
-            foreach (var button in m_Buttons)
+            var button = NearestButton(local.Value);
+            if (button != null)
             {
-                if (!Over(button.Part, local.Value))
-                    continue;
                 button.Click?.Invoke();
                 m_Drag = Drag.None;
                 return true;
@@ -303,6 +341,9 @@ namespace CardboardXR.Demos.Desktop
             go.transform.SetParent(parent, false);
             go.transform.localPosition = new Vector3(0f, 0f, -0.003f);
             var text = go.AddComponent<TextMeshPro>();
+            var assets = M3Assets.Instance;
+            if (assets != null && assets.Regular != null)
+                text.font = assets.Regular;
             text.alignment = TextAlignmentOptions.Center;
             text.textWrappingMode = TextWrappingModes.Normal;
             text.color = Color.white;
@@ -324,17 +365,48 @@ namespace CardboardXR.Demos.Desktop
             m_Corner.localPosition = new Vector3(m_Width / 2f + corner * 0.3f, -height / 2f - corner * 0.3f, -0.002f);
             m_Label.rectTransform.sizeDelta = new Vector2(m_Width * 0.85f, height * 0.85f);
 
-            // Buttons in a row above the picture, from the left.
-            const float width = 0.22f, gap = 0.03f;
-            var x = -m_Width / 2f + width / 2f;
-            foreach (var button in m_Buttons)
+            // Compact icon toolbar above the page. Wraps into extra rows if the screen is resized small.
+            const float buttonHeight = 0.09f, gap = 0.014f, edge = 0.025f, minButtonWidth = 0.125f;
+            var available = Mathf.Max(minButtonWidth, m_Width - edge * 2f);
+            var columns = Mathf.Max(1, Mathf.FloorToInt((available + gap) / (minButtonWidth + gap)));
+            columns = Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count));
+            var buttonWidth = Mathf.Min(0.2f, (available - gap * (columns - 1)) / columns);
+            var rows = Mathf.Max(1, (m_Buttons.Count + columns - 1) / columns);
+            var toolbarHeight = rows * buttonHeight + (rows - 1) * gap + 0.024f;
+            var toolbarTop = height / 2f + 0.045f;
+            var toolbarCenter = toolbarTop + toolbarHeight / 2f;
+            m_Toolbar.gameObject.SetActive(m_Buttons.Count > 0);
+            m_Toolbar.localScale = new Vector3(m_Width + 0.04f, toolbarHeight, 1f);
+            m_Toolbar.localPosition = new Vector3(0f, toolbarCenter, 0.006f);
+
+            for (var i = 0; i < m_Buttons.Count; i++)
             {
-                button.Part.localScale = new Vector3(width, k_ButtonHeight, 1f);
-                button.Part.localPosition = new Vector3(x, height / 2f + 0.06f + k_ButtonHeight / 2f, 0f);
-                var label = button.Part.GetChild(0);
-                label.localScale = new Vector3(1f / width, 1f / k_ButtonHeight, 1f);
-                ((RectTransform)label).sizeDelta = new Vector2(width, k_ButtonHeight);
-                x += width + gap;
+                var button = m_Buttons[i];
+                var row = i / columns;
+                var column = i % columns;
+                var rowCount = Mathf.Min(columns, m_Buttons.Count - row * columns);
+                var rowWidth = rowCount * buttonWidth + (rowCount - 1) * gap;
+                var x = -rowWidth / 2f + buttonWidth / 2f + column * (buttonWidth + gap);
+                var y = toolbarTop + 0.012f + buttonHeight / 2f + row * (buttonHeight + gap);
+                button.Part.localScale = new Vector3(buttonWidth, buttonHeight, 1f);
+                button.Part.localPosition = new Vector3(x, y, -0.002f);
+
+                var textScale = new Vector3(1f / buttonWidth, 1f / buttonHeight, 1f);
+                button.Icon.transform.localScale = textScale;
+                button.Label.transform.localScale = textScale;
+                button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.05f);
+                button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.035f);
+                button.Icon.fontSize = 0.044f;
+                button.Label.fontSize = 0.024f;
+                button.Icon.textWrappingMode = TextWrappingModes.NoWrap;
+                button.Label.textWrappingMode = TextWrappingModes.NoWrap;
+                button.Icon.overflowMode = TextOverflowModes.Overflow;
+                button.Label.overflowMode = TextOverflowModes.Ellipsis;
+                button.Icon.gameObject.SetActive(button.HasIcon);
+                button.Label.transform.localPosition = new Vector3(0f,
+                    (button.HasIcon ? -0.026f : 0f) / buttonHeight, -0.01f);
+                if (button.HasIcon)
+                    button.Icon.transform.localPosition = new Vector3(0f, 0.016f / buttonHeight, -0.01f);
             }
         }
 
@@ -355,6 +427,23 @@ namespace CardboardXR.Demos.Desktop
             var size = part.localScale;
             return Mathf.Abs(local.x - center.x) <= size.x / 2f + k_Pad &&
                    Mathf.Abs(local.y - center.y) <= size.y / 2f + k_Pad;
+        }
+
+        Button NearestButton(Vector3 local)
+        {
+            Button nearest = null;
+            var nearestDistance = float.PositiveInfinity;
+            foreach (var button in m_Buttons)
+            {
+                if (!Over(button.Part, local))
+                    continue;
+                var distance = (local - button.Part.localPosition).sqrMagnitude;
+                if (distance >= nearestDistance)
+                    continue;
+                nearest = button;
+                nearestDistance = distance;
+            }
+            return nearest;
         }
 
         // The point in the picture (0..1, y down), or null off the picture.

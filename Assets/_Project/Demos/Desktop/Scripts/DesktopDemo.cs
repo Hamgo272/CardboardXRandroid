@@ -44,13 +44,14 @@ namespace CardboardXR.Demos.Desktop
                     m_Keys.Hide();
                 else
                     m_Keys.Show(m_Core.Head);
-            });
+            }, "keyboard");
             m_Keys = new SurfaceKeyboard(core.Boundary.transform, m_Material)
             {
                 Text = t => m_Link.SendText(t),
                 Backspace = () => m_Link.SendKey("back"),
                 Enter = () => m_Link.SendKey("enter"),
                 PadMove = p => { m_Cursor = p; m_Screen.SetCursor(p); m_Link.Send("move", p); },
+                PadScroll = meters => Wheel(m_Cursor, meters),
                 PadTap = () => m_Link.Send("click", m_Cursor),
             };
             m_Screen.PlaceInFront(core.Head);
@@ -121,6 +122,10 @@ namespace CardboardXR.Demos.Desktop
         public bool TryBeginPinch(GameObject gazeTarget, PinchSource source) =>
             m_Screen != null && (m_Keys.TryBeginPinch(m_Core.Head) || m_Screen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker));
 
-        public void EndPinch() => m_Screen?.EndPinch(m_Core.Head);
+        public void EndPinch()
+        {
+            m_Keys?.EndPinch();
+            m_Screen?.EndPinch(m_Core.Head);
+        }
     }
 }

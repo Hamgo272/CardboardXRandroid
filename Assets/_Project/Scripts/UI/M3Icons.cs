@@ -9,6 +9,7 @@ namespace CardboardXR.UI
         public static readonly IReadOnlyDictionary<string, int> Codepoints = new Dictionary<string, int>
         {
             ["home"] = 0xe88a,
+            ["search"] = 0xe8b6,
             ["my_location"] = 0xe55c,
             ["view_in_ar"] = 0xe9fe,
             ["visibility"] = 0xe8f4,
@@ -45,6 +46,7 @@ namespace CardboardXR.UI
             ["stop"] = 0xe047,
             ["timer"] = 0xe425,
             ["settings"] = 0xe8b8,
+            ["keyboard"] = 0xe312,
             ["chevron_left"] = 0xe5cb,
             ["chevron_right"] = 0xe5cc,
             ["open_with"] = 0xe89f,

@@ -69,8 +69,9 @@ namespace CardboardXR.Demos.Desktop
             "t.indexOf('pointer')==0?new PointerEvent(t,o):new MouseEvent(t,o));}catch(_){}});" +
             "if(e.focus)e.focus();e.click();})({0},{1})";
         const string k_Scroll =
-            "(function(x,y,d){var e=document.elementFromPoint(x,y);while(e&&e!==document.body){" +
-            "var s=getComputedStyle(e);if((s.overflowY=='auto'||s.overflowY=='scroll')&&e.scrollHeight>e.clientHeight)" +
+            "(function(x,y,d){var e=document.elementFromPoint(x,y);while(e&&e!==document.documentElement){" +
+            "var s=getComputedStyle(e),o=s.overflowY,t=e.scrollTop,m=e.scrollHeight-e.clientHeight;" +
+            "if((o=='auto'||o=='scroll'||o=='overlay')&&m>1&&((d>0&&t<m-1)||(d<0&&t>1)))" +
             "{e.scrollBy(0,d);return;}e=e.parentElement;}window.scrollBy(0,d);})({0},{1},{2})";
         const string k_Type =
             "(function(t){var e=document.activeElement;if(!e||!('value' in e))return;e.value=t;" +
@@ -88,6 +89,9 @@ namespace CardboardXR.Demos.Desktop
         readonly int m_Height;
         readonly byte[] m_Buffer;
         int m_Frame = -1;
+        Vector2 m_ScrollPoint;
+        float m_PendingScroll;
+        float m_LastScrollSent = -1f;
 
         public Texture2D Texture { get; }
         public bool HasFrame => m_Frame > 0;
@@ -123,8 +127,11 @@ namespace CardboardXR.Demos.Desktop
 #endif
         }
 
-        public void Scroll(Vector2 point, float pixels) =>
-            GlassesWeb_Eval(Fill(k_Scroll, Number(point.x * m_Width), Number(point.y * m_Height), Number(pixels)));
+        public void Scroll(Vector2 point, float pixels)
+        {
+            m_ScrollPoint = point;
+            m_PendingScroll += pixels;
+        }
         public void Type(string text) => GlassesWeb_Eval(Fill(k_Type, Quote(text)));
         public void InsertText(string text) => GlassesWeb_Eval(Fill(k_Insert, Quote(text)));
         public void Backspace() => GlassesWeb_Eval(k_Delete);
@@ -141,6 +148,7 @@ namespace CardboardXR.Demos.Desktop
 
         public bool Update()
         {
+            FlushScroll();
 #if UNITY_ANDROID && !UNITY_EDITOR
             var frame = GlassesWeb_CopyFrame();
             if (frame == null || frame.Length != m_Buffer.Length)
@@ -158,8 +166,22 @@ namespace CardboardXR.Demos.Desktop
             return true;
         }
 
+        void FlushScroll()
+        {
+            if (Mathf.Abs(m_PendingScroll) < 0.5f)
+                return;
+            var now = Time.unscaledTime;
+            if (m_LastScrollSent >= 0f && now - m_LastScrollSent < 0.025f)
+                return;
+            var pixels = m_PendingScroll;
+            m_PendingScroll = 0f;
+            m_LastScrollSent = now;
+            GlassesWeb_Eval(Fill(k_Scroll, Number(m_ScrollPoint.x * m_Width), Number(m_ScrollPoint.y * m_Height), Number(pixels)));
+        }
+
         public void Dispose()
         {
+            m_PendingScroll = 0f;
             GlassesWeb_Destroy();
             UnityEngine.Object.Destroy(Texture);
         }

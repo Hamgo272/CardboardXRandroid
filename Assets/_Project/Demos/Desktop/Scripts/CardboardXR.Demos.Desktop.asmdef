@@ -6,6 +6,7 @@
         "CardboardXR.Stereo",
         "CardboardXR.Hands",
         "CardboardXR.Interaction",
+        "CardboardXR.UI",
         "Unity.TextMeshPro",
         "Unity.XR.ARFoundation"
     ],

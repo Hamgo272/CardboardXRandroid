@@ -1,3 +1,4 @@
+using System;
 using CardboardXR.Hands;
 using UnityEngine;
 
@@ -13,7 +14,7 @@ namespace CardboardXR.Demos.Desktop
         const string k_Home = "https://www.google.com";
         const string k_YouTube = "https://www.youtube.com";
         const string k_LastKey = "CardboardXR.WebLast";
-        const float k_PixelsPerMeter = 3000f;
+        const float k_PixelsPerMeter = 5000f;
         const int k_PageWidth = 1280;
         const int k_PageHeight = 720;
 
@@ -38,18 +39,19 @@ namespace CardboardXR.Demos.Desktop
                 HoldUp = p => m_Web.Tap(p),
                 Scroll = (p, meters) => m_Web.Scroll(p, meters * k_PixelsPerMeter),
             };
-            m_Screen.AddButton("Back", () => m_Web.Back());
-            m_Screen.AddButton("Google", () => Open(k_Home));
-            m_Screen.AddButton("YouTube", () => Open(k_YouTube));
-            m_Screen.AddButton("Reload", () => m_Web.Reload());
-            m_Screen.AddButton("Keyboard", ToggleKeys);
-            m_Screen.AddButton("Address", OpenKeyboard);
+            m_Screen.AddButton("Back", () => m_Web.Back(), "chevron_left");
+            m_Screen.AddButton("Home", () => Open(k_Home), "home");
+            m_Screen.AddButton("YouTube", () => Open(k_YouTube), "movie");
+            m_Screen.AddButton("Reload", () => m_Web.Reload(), "refresh");
+            m_Screen.AddButton("Keys", ToggleKeys, "keyboard");
+            m_Screen.AddButton("Search", OpenKeyboard, "search");
             m_Keys = new SurfaceKeyboard(core.Boundary.transform, m_Material)
             {
                 Text = t => m_Web.InsertText(t),
                 Backspace = () => m_Web.Backspace(),
                 Enter = () => m_Web.Enter(),
                 PadMove = p => { m_Cursor = p; m_Screen.SetCursor(p); },
+                PadScroll = meters => m_Web.Scroll(m_Cursor, meters * k_PixelsPerMeter),
                 PadTap = () => m_Web.Tap(m_Cursor),
             };
             m_Screen.PlaceInFront(core.Head);
@@ -99,9 +101,10 @@ namespace CardboardXR.Demos.Desktop
 
         void OpenKeyboard()
         {
+            m_Keys?.Hide();
             if (m_Keyboard == null)
-                m_Keyboard = TouchScreenKeyboard.Open("", TouchScreenKeyboardType.Default, true, false, false, false,
-                    "Search or address");
+                m_Keyboard = TouchScreenKeyboard.Open("", TouchScreenKeyboardType.URL, false, false, false, false,
+                    "Address or search the web");
         }
 
         void Submit(string text)
@@ -114,7 +117,7 @@ namespace CardboardXR.Demos.Desktop
             else if (!text.Contains(" ") && text.Contains(".") && !text.EndsWith("."))
                 Open("https://" + text);
             else
-                m_Web.Type(text);
+                Open("https://www.google.com/search?q=" + Uri.EscapeDataString(text));
         }
 
         void Open(string url)
@@ -148,6 +151,10 @@ namespace CardboardXR.Demos.Desktop
         public bool TryBeginPinch(GameObject gazeTarget, PinchSource source) =>
             m_Screen != null && (m_Keys.TryBeginPinch(m_Core.Head) || m_Screen.TryBeginPinch(m_Core.Head, source, m_Core.HandTracker));
 
-        public void EndPinch() => m_Screen?.EndPinch(m_Core.Head);
+        public void EndPinch()
+        {
+            m_Keys?.EndPinch();
+            m_Screen?.EndPinch(m_Core.Head);
+        }
     }
 }
