@@ -403,12 +403,13 @@ namespace CardboardXR.Demos.Desktop
             m_Corner.localPosition = new Vector3(m_Width / 2f + corner * 0.3f, -height / 2f - corner * 0.3f, -0.002f);
             m_Label.rectTransform.sizeDelta = new Vector2(m_Width * 0.85f, height * 0.85f);
 
-            // Compact icon toolbar above the page. Wraps into extra rows if the screen is resized small.
-            const float buttonHeight = 0.09f, gap = 0.014f, edge = 0.025f, minButtonWidth = 0.125f;
-            var available = Mathf.Max(minButtonWidth, m_Width - edge * 2f);
+            // Large, gaze-friendly toolbar buttons. Keep at most four columns so adding
+            // controls creates additional rows instead of squeezing every button smaller.
+            const float buttonHeight = 0.145f, gap = 0.018f, edge = 0.025f, minButtonWidth = 0.20f;
+            var available = Mathf.Max(0.20f, m_Width - edge * 2f);
             var columns = Mathf.Max(1, Mathf.FloorToInt((available + gap) / (minButtonWidth + gap)));
-            columns = Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count));
-            var buttonWidth = Mathf.Min(0.2f, (available - gap * (columns - 1)) / columns);
+            columns = Mathf.Min(4, Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count)));
+            var buttonWidth = (available - gap * (columns - 1)) / columns;
             var rows = Mathf.Max(1, (m_Buttons.Count + columns - 1) / columns);
             var toolbarHeight = rows * buttonHeight + (rows - 1) * gap + 0.024f;
             var toolbarTop = height / 2f + 0.045f;
@@ -432,21 +433,21 @@ namespace CardboardXR.Demos.Desktop
                 var textScale = new Vector3(1f / buttonWidth, 1f / buttonHeight, 1f);
                 button.Icon.transform.localScale = textScale;
                 button.Label.transform.localScale = textScale;
-                button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.05f);
-                button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.035f);
+                button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.075f);
+                button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.045f);
                 // The label and icon are inversely scaled with their button. TMP's font size is
                 // therefore in the button's unscaled space, not meters.
-                button.Icon.fontSize = 0.48f;
-                button.Label.fontSize = 0.24f;
+                button.Icon.fontSize = 0.56f;
+                button.Label.fontSize = 0.29f;
                 button.Icon.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Label.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Icon.overflowMode = TextOverflowModes.Overflow;
                 button.Label.overflowMode = TextOverflowModes.Ellipsis;
                 button.Icon.gameObject.SetActive(button.HasIcon);
                 button.Label.transform.localPosition = new Vector3(0f,
-                    (button.HasIcon ? -0.026f : 0f) / buttonHeight, -0.01f);
+                    (button.HasIcon ? -0.042f : 0f) / buttonHeight, -0.01f);
                 if (button.HasIcon)
-                    button.Icon.transform.localPosition = new Vector3(0f, 0.016f / buttonHeight, -0.01f);
+                    button.Icon.transform.localPosition = new Vector3(0f, 0.026f / buttonHeight, -0.01f);
             }
         }
 
