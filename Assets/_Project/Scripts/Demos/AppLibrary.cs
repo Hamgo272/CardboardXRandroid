@@ -239,7 +239,8 @@ namespace CardboardXR.Demos
                 .gameObject;
             running.SetActive(false);
             cell.gameObject.AddComponent<AppTileGaze>().Initialize(m_Tagline, string.IsNullOrEmpty(tagline) ? title : tagline, k_Prompt);
-            if (entry != null || title == m_LobbyTitle)\n                m_Tiles.Add((entry, running));
+            if (entry != null || title == m_LobbyTitle)
+                m_Tiles.Add((entry, running));
         }
     }
 }
