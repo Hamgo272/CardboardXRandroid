@@ -25,6 +25,11 @@ cd $P || exit 1
 # Editor/Unity processes and could let batchmode run alongside the GUI Editor.
 if pgrep -f "$U" >/dev/null; then echo "Unity is running; close the project in the Editor first"; exit 1; fi
 
+echo "== prepare generated UI assets"
+rm -f $LOGS/material-assets.log
+$U -batchmode -projectPath $P -executeMethod ProjectBootstrap.MaterialAssets.Ensure -logFile $LOGS/material-assets.log || exit 1
+grep -E "\\[MaterialAssets\\]|error CS" $LOGS/material-assets.log | head -20
+
 echo "== EditMode tests"
 rm -f $LOGS/tests.xml
 $U -batchmode -projectPath $P -runTests -testPlatform EditMode -testResults $LOGS/tests.xml -logFile $LOGS/tests.log

@@ -183,11 +183,19 @@ namespace ProjectBootstrap
             if (missing.Length == 0)
                 return;
             icons.atlasPopulationMode = AtlasPopulationMode.Dynamic;
-            icons.TryAddCharacters(missing.ToString(), out _);
+            var added = icons.TryAddCharacters(missing.ToString(), out var missingCharacters);
             icons.atlasPopulationMode = AtlasPopulationMode.Static;
             EditorUtility.SetDirty(icons);
             AssetDatabase.SaveAssets();
-            Debug.Log($"[MaterialAssets] Added {count} icons to the icon font");
+            if (!added)
+            {
+                var missingList = string.Join(", ", missingCharacters.Select(codepoint => $"U+{codepoint:X4}"));
+                Debug.LogError($"[MaterialAssets] Could not add {missingCharacters.Length} icon glyph(s): {missingList}");
+            }
+            else
+            {
+                Debug.Log($"[MaterialAssets] Added {count} icons to the icon font");
+            }
         }
 
         static Sprite RoundSprite()
