@@ -43,8 +43,8 @@ namespace CardboardXR.Demos.Desktop
             m_Screen.AddButton("Home", () => Open(k_Home), "home");
             m_Screen.AddButton("YouTube", () => Open(k_YouTube), "movie");
             m_Screen.AddButton("Reload", () => m_Web.Reload(), "refresh");
-            m_Screen.AddButton("Keys", ToggleKeys, "keyboard");
-            m_Screen.AddButton("Search", OpenKeyboard, "search");
+            m_Screen.AddButton("Keys", ToggleKeys, "touch_app");
+            m_Screen.AddButton("Search", OpenKeyboard, "edit");
             m_Keys = new SurfaceKeyboard(core.Boundary.transform, m_Material)
             {
                 Text = t => m_Web.InsertText(t),

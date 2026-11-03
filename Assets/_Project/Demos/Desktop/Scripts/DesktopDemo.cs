@@ -44,7 +44,7 @@ namespace CardboardXR.Demos.Desktop
                     m_Keys.Hide();
                 else
                     m_Keys.Show(m_Core.Head);
-            }, "keyboard");
+            }, "touch_app");
             m_Keys = new SurfaceKeyboard(core.Boundary.transform, m_Material)
             {
                 Text = t => m_Link.SendText(t),
