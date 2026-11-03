@@ -133,7 +133,10 @@ namespace CardboardXR.Demos.Desktop
 
             try
             {
-                var dimensions = new Vector2Int(Mathf.Min(1280, image.width), Mathf.Min(1280, image.height));
+                var scale = Mathf.Min(1f, 1280f / Mathf.Max(image.width, image.height));
+                var dimensions = new Vector2Int(
+                    Mathf.Max(1, Mathf.RoundToInt(image.width * scale)),
+                    Mathf.Max(1, Mathf.RoundToInt(image.height * scale)));
                 var conversion = new XRCpuImage.ConversionParams
                 {
                     inputRect = new RectInt(0, 0, image.width, image.height),
