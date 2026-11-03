@@ -230,7 +230,7 @@ namespace CardboardXR.Demos.Desktop
             switch (m_Drag)
             {
                 case Drag.Pending:
-                    // Pinch is exclusively for clicking/holding. It never transitions into scrolling.
+                    // Without enough drag movement, a tap remains a tap; long-press is opt-in.
                     if (HoldDown != null && Time.unscaledTime - m_PinchStart > k_HoldTime)
                     {
                         m_Drag = Drag.Hold;
