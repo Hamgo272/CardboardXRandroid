@@ -12,7 +12,7 @@ namespace CardboardXR.Demos.Desktop
     // lower corner resizes it. Positions in the picture are 0..1, y down.
     public class FloatingScreen
     {
-        const float k_StartWidth = 1.6f;
+        const float k_StartWidth = 2.2f;
         const float k_StartDistance = 1.8f;
         const float k_MinWidth = 0.3f;
         const float k_MaxWidth = 12f;
@@ -32,7 +32,7 @@ namespace CardboardXR.Demos.Desktop
         static readonly Color k_Hot = M3Theme.Primary;
         static readonly Color k_Backing = M3Theme.Surface;
         static readonly Color k_Toolbar = M3Theme.SurfaceContainer;
-        static readonly Color k_Button = M3Theme.SurfaceContainerHigh;
+        static readonly Color k_Button = M3Theme.SecondaryContainer;
 
         // Tap at a point; a held pinch (down, moves, up); scroll in page pixels (up > 0).
         public Action<Vector2> Tap;
@@ -74,6 +74,10 @@ namespace CardboardXR.Demos.Desktop
         readonly Transform m_Toolbar;
         readonly Transform m_Bar;
         readonly Transform m_Corner;
+        readonly Transform m_Close;
+        readonly Material m_CloseMaterial;
+        readonly TextMeshPro m_CloseIcon;
+        Action m_CloseAction;
         readonly Material m_ContentMaterial;
         readonly Material m_BarMaterial;
         readonly Material m_CornerMaterial;
@@ -108,6 +112,13 @@ namespace CardboardXR.Demos.Desktop
             m_Toolbar = Part("Toolbar", k_Toolbar, out _, rounded: true);
             m_Bar = Part("Move Bar", k_Handle, out m_BarMaterial, rounded: true);
             m_Corner = Part("Resize Handle", k_Handle, out m_CornerMaterial, rounded: true);
+            m_Close = Part("Close Button", k_Button, out m_CloseMaterial, rounded: true);
+            m_CloseIcon = Text(m_Close, "Close Icon");
+            var iconAssets = M3Assets.Instance;
+            if (iconAssets != null && iconAssets.Icons != null)
+                m_CloseIcon.font = iconAssets.Icons;
+            m_CloseIcon.text = M3Icons.Glyph("close");
+            m_Close.gameObject.SetActive(false);
             m_Cursor = Part("Cursor", Color.white, out _);
             m_Cursor.gameObject.SetActive(false);
             m_Label = Text(m_Root, "Status");
@@ -126,6 +137,15 @@ namespace CardboardXR.Demos.Desktop
         }
 
         public void Destroy() => UnityEngine.Object.Destroy(m_Root.gameObject);
+
+        // The reference app-window UI puts Close in the small orbiter above the window.
+        // Keep the original demo-specific action supplied by WebDemo (exit or close Maps).
+        public void SetCloseAction(Action close)
+        {
+            m_CloseAction = close;
+            m_Close.gameObject.SetActive(close != null);
+            Layout();
+        }
 
         public void AddButton(string label, Action click, string icon = null)
         {
@@ -213,6 +233,9 @@ namespace CardboardXR.Demos.Desktop
             var hoveredButton = idle ? NearestButton(gaze.Value) : null;
             m_BarMaterial.color = m_Drag == Drag.Move || (idle && Over(m_Bar, gaze.Value)) ? k_Hot : k_Handle;
             m_CornerMaterial.color = m_Drag == Drag.Resize || (idle && Over(m_Corner, gaze.Value)) ? k_Hot : k_Handle;
+            var closeHot = m_CloseAction != null && idle && Over(m_Close, gaze.Value);
+            m_CloseMaterial.color = closeHot ? k_Hot : k_Button;
+            m_CloseIcon.color = closeHot ? M3Theme.OnPrimary : M3Theme.OnSurface;
             foreach (var button in m_Buttons)
             {
                 var hot = button == hoveredButton;
@@ -298,6 +321,13 @@ namespace CardboardXR.Demos.Desktop
             m_PinchStart = Time.unscaledTime;
             m_HandStart = m_LastHand = HandPoint(hands);
 
+            if (m_CloseAction != null && Over(m_Close, local.Value))
+            {
+                CardboardXR.Interaction.AndroidHaptics.Confirm();
+                m_CloseAction.Invoke();
+                m_Drag = Drag.None;
+                return true;
+            }
             var button = NearestButton(local.Value);
             if (button != null)
             {
@@ -444,43 +474,56 @@ namespace CardboardXR.Demos.Desktop
         }
 
         // Unity's quad faces -z, so the root's forward points away from the user.
+                // Unity's quad faces -z, so the root's forward points away from the user.
         void Layout()
         {
             var height = m_Width * m_Aspect;
             m_Content.localScale = new Vector3(m_Width, height, 1f);
 
-            const float headerHeight = 0.10f;
-            const float shelfGap = 0.035f;
-            var barWidth = Mathf.Clamp(m_Width * 0.20f, 0.14f, 0.30f);
-            m_Bar.localScale = new Vector3(barWidth, 0.014f, 1f);
-            m_Bar.localPosition = new Vector3(m_Width * 0.34f, height / 2f + headerHeight * 0.5f, 0f);
+            // Android XR-style window chrome: a distinct header, a move grip and a round close
+            // orbiter above the content, with the controls in a separate rounded dock below.
+            const float headerHeight = 0.16f;
+            const float shelfGap = 0.045f;
+            var barWidth = Mathf.Clamp(m_Width * 0.10f, 0.14f, 0.22f);
+            m_Bar.localScale = new Vector3(barWidth, 0.018f, 1f);
+            m_Bar.localPosition = new Vector3(m_Width * 0.30f, height / 2f + headerHeight * 0.50f, 0f);
+
+            var closeSize = Mathf.Clamp(m_Width * 0.045f, 0.085f, 0.11f);
+            m_Close.localScale = new Vector3(closeSize, closeSize, 1f);
+            m_Close.localPosition = new Vector3(m_Width / 2f - closeSize * 0.65f,
+                height / 2f + headerHeight * 0.50f, -0.004f);
+            m_CloseIcon.transform.localScale = new Vector3(1f / closeSize, 1f / closeSize, 1f);
+            m_CloseIcon.rectTransform.sizeDelta = new Vector2(closeSize, closeSize);
+            m_CloseIcon.fontSize = 0.62f;
+            m_CloseIcon.alignment = TextAlignmentOptions.Center;
+            m_CloseIcon.textWrappingMode = TextWrappingModes.NoWrap;
 
             var corner = Mathf.Clamp(m_Width * 0.035f, 0.045f, 0.16f);
             m_Corner.localScale = new Vector3(corner, corner, 1f);
             m_Corner.localPosition = new Vector3(m_Width / 2f - corner * 0.30f,
                 -height / 2f - corner * 0.30f, -0.002f);
             m_Label.rectTransform.sizeDelta = new Vector2(m_Width * 0.84f, height * 0.82f);
-            m_Title.rectTransform.sizeDelta = new Vector2(m_Width * 0.56f, 0.065f);
+            m_Title.rectTransform.sizeDelta = new Vector2(m_Width * 0.52f, 0.085f);
             m_Title.transform.localPosition = new Vector3(-m_Width * 0.47f,
-                height / 2f + headerHeight * 0.5f, -0.012f);
+                height / 2f + headerHeight * 0.50f, -0.012f);
 
-            // Compact Material-style control dock: up to six columns, with an icon and a short
-            // label instead of the old oversized grid of large rectangular buttons.
-            const float buttonHeight = 0.14f, gap = 0.012f, edge = 0.035f, minButtonWidth = 0.15f;
+            // Tonal Material 3 pill controls in a separate dock. The 8dp-like spacing and
+            // two-row wrap keep the original browser actions available without tiny targets.
+            const float buttonHeight = 0.15f, gap = 0.018f, edge = 0.045f, minButtonWidth = 0.22f;
             var available = Mathf.Max(0.20f, m_Width - edge * 2f);
             var columns = Mathf.Max(1, Mathf.FloorToInt((available + gap) / (minButtonWidth + gap)));
-            columns = Mathf.Min(6, Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count)));
+            columns = Mathf.Min(8, Mathf.Min(columns, Mathf.Max(1, m_Buttons.Count)));
             var buttonWidth = (available - gap * (columns - 1)) / columns;
             var rows = Mathf.Max(1, (m_Buttons.Count + columns - 1) / columns);
-            var toolbarHeight = rows * buttonHeight + (rows - 1) * gap + 0.024f;
+            var toolbarHeight = rows * buttonHeight + (rows - 1) * gap + 0.04f;
             var toolbarBottom = -height / 2f - shelfGap;
             var toolbarCenter = toolbarBottom - toolbarHeight / 2f;
             m_Toolbar.gameObject.SetActive(m_Buttons.Count > 0);
-            m_Toolbar.localScale = new Vector3(m_Width + 0.035f, toolbarHeight, 1f);
+            m_Toolbar.localScale = new Vector3(m_Width + 0.055f, toolbarHeight, 1f);
             m_Toolbar.localPosition = new Vector3(0f, toolbarCenter, 0.006f);
 
-            var backingHeight = headerHeight + height + shelfGap + toolbarHeight + 0.035f;
-            m_Backing.localScale = new Vector3(m_Width + 0.045f, backingHeight, 1f);
+            var backingHeight = headerHeight + height + shelfGap + toolbarHeight + 0.055f;
+            m_Backing.localScale = new Vector3(m_Width + 0.075f, backingHeight, 1f);
             m_Backing.localPosition = new Vector3(0f, (headerHeight - toolbarHeight - shelfGap) / 2f, 0.012f);
 
             for (var i = 0; i < m_Buttons.Count; i++)
@@ -491,25 +534,25 @@ namespace CardboardXR.Demos.Desktop
                 var rowCount = Mathf.Min(columns, m_Buttons.Count - row * columns);
                 var rowWidth = rowCount * buttonWidth + (rowCount - 1) * gap;
                 var x = -rowWidth / 2f + buttonWidth / 2f + column * (buttonWidth + gap);
-                var y = toolbarBottom - 0.012f - buttonHeight / 2f - row * (buttonHeight + gap);
+                var y = toolbarBottom - 0.018f - buttonHeight / 2f - row * (buttonHeight + gap);
                 button.Part.localScale = new Vector3(buttonWidth, buttonHeight, 1f);
                 button.Part.localPosition = new Vector3(x, y, -0.002f);
 
                 var textScale = new Vector3(1f / buttonWidth, 1f / buttonHeight, 1f);
                 button.Icon.transform.localScale = textScale;
                 button.Label.transform.localScale = textScale;
-                button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.072f);
+                button.Icon.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.078f);
                 button.Label.rectTransform.sizeDelta = new Vector2(buttonWidth, 0.040f);
-                button.Icon.fontSize = 0.88f;
-                button.Label.fontSize = 0.29f;
+                button.Icon.fontSize = 0.82f;
+                button.Label.fontSize = 0.30f;
                 button.Icon.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Label.textWrappingMode = TextWrappingModes.NoWrap;
                 button.Icon.overflowMode = TextOverflowModes.Overflow;
                 button.Label.overflowMode = TextOverflowModes.Ellipsis;
                 button.Icon.gameObject.SetActive(button.HasIcon);
-                button.Label.transform.localPosition = new Vector3(0f, -0.048f / buttonHeight, -0.01f);
+                button.Label.transform.localPosition = new Vector3(0f, -0.052f / buttonHeight, -0.01f);
                 if (button.HasIcon)
-                    button.Icon.transform.localPosition = new Vector3(0f, 0.027f / buttonHeight, -0.01f);
+                    button.Icon.transform.localPosition = new Vector3(0f, 0.030f / buttonHeight, -0.01f);
             }
         }
 

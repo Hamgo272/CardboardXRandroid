@@ -50,6 +50,7 @@ namespace CardboardXR.Demos.Desktop
                 HoldUp = p => m_Web.Tap(p),
                 Scroll = (p, pixels) => m_Web.Scroll(p, pixels),
             };
+            m_Screen.SetCloseAction(() => m_Core.Demos.ExitToLobby());
             m_Screen.AddButton("Back", () => m_Web.Back(), "chevron_left");
             m_Screen.AddButton("Home", () => Open(k_Home), "home");
             m_Screen.AddButton("Maps", OpenGoogleMaps, "map");
@@ -158,6 +159,7 @@ namespace CardboardXR.Demos.Desktop
                 HoldUp = point => m_MapsWeb.TouchUp(point),
                 Scroll = (point, pixels) => m_MapsWeb.Scroll(point, pixels),
             };
+            m_MapsScreen.SetCloseAction(() => CloseGoogleMaps());
             m_MapsScreen.AddButton("Back", () => m_MapsWeb?.Back(), "chevron_left");
             m_MapsScreen.AddButton("Reload", () => m_MapsWeb?.Reload(), "refresh");
             m_MapsScreen.AddButton("Center", () => m_MapsScreen?.PlaceInFront(m_Core.Head), "my_location");
