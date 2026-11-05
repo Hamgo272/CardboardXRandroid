@@ -12,7 +12,7 @@ namespace CardboardXR.Demos.Desktop
     // lower corner resizes it. Positions in the picture are 0..1, y down.
     public class FloatingScreen
     {
-        const float k_StartWidth = 1.2f;
+        const float k_StartWidth = 1.6f;
         const float k_StartDistance = 1.8f;
         const float k_MinWidth = 0.3f;
         const float k_MaxWidth = 12f;
@@ -27,11 +27,12 @@ namespace CardboardXR.Demos.Desktop
         const float k_PushGain = 3f;
         const float k_Pad = 0.025f;
 
-        static readonly Color k_Handle = new(0.38f, 0.48f, 0.63f, 1f);
-        static readonly Color k_Hot = new(0.32f, 0.56f, 0.88f, 1f);
-        static readonly Color k_Backing = new(0.045f, 0.055f, 0.075f, 0.98f);
-        static readonly Color k_Toolbar = new(0.085f, 0.105f, 0.14f, 0.99f);
-        static readonly Color k_Button = new(0.145f, 0.17f, 0.22f, 1f);
+        // Material 3 dark roles from the reference app-window UI.
+        static readonly Color k_Handle = M3Theme.Outline;
+        static readonly Color k_Hot = M3Theme.Primary;
+        static readonly Color k_Backing = M3Theme.Surface;
+        static readonly Color k_Toolbar = M3Theme.SurfaceContainer;
+        static readonly Color k_Button = M3Theme.SurfaceContainerHigh;
 
         // Tap at a point; a held pinch (down, moves, up); scroll in page pixels (up > 0).
         public Action<Vector2> Tap;
@@ -113,12 +114,14 @@ namespace CardboardXR.Demos.Desktop
             m_Label.enableAutoSizing = true;
             m_Label.fontSizeMin = 0.10f;
             m_Label.fontSizeMax = 1.4f;
+            m_Label.color = M3Theme.OnSurfaceVariant;
             m_Title = Text(m_Root, "Window Title");
             m_Title.text = name;
             m_Title.alignment = TextAlignmentOptions.Left;
+            m_Title.color = M3Theme.OnSurface;
             m_Title.enableAutoSizing = true;
-            m_Title.fontSizeMin = 0.06f;
-            m_Title.fontSizeMax = 0.11f;
+            m_Title.fontSizeMin = 0.075f;
+            m_Title.fontSizeMax = 0.13f;
             Layout();
         }
 
@@ -214,7 +217,7 @@ namespace CardboardXR.Demos.Desktop
             {
                 var hot = button == hoveredButton;
                 button.Material.color = hot ? k_Hot : k_Button;
-                button.Icon.color = button.Label.color = hot ? k_Backing : Color.white;
+                button.Icon.color = button.Label.color = hot ? M3Theme.OnPrimary : M3Theme.OnSurface;
             }
 
             var hand = HandPoint(hands);
@@ -436,7 +439,7 @@ namespace CardboardXR.Demos.Desktop
                 text.font = assets.Regular;
             text.alignment = TextAlignmentOptions.Center;
             text.textWrappingMode = TextWrappingModes.Normal;
-            text.color = Color.white;
+            text.color = M3Theme.OnSurface;
             return text;
         }
 

@@ -1,5 +1,6 @@
 using System;
 using CardboardXR.Hands;
+using CardboardXR.UI;
 using UnityEngine;
 using Unity.Collections;
 using UnityEngine.XR.ARFoundation;
@@ -24,9 +25,11 @@ namespace CardboardXR.Demos.Desktop
 
         CoreServices m_Core;
         FloatingScreen m_Screen;
+        FloatingWindows.Window m_BrowserWindow;
         WebView m_Web;
         WebView m_MapsWeb;
         FloatingScreen m_MapsScreen;
+        FloatingWindows.Window m_MapsWindow;
         TouchScreenKeyboard m_Keyboard;
         SurfaceKeyboard m_Keys;
         Vector2 m_Cursor = new(0.5f, 0.5f);
@@ -58,6 +61,12 @@ namespace CardboardXR.Demos.Desktop
             m_Screen.AddButton("Find", OpenKeyboard, "edit");
             m_Screen.AddButton("Voice", StartVoiceSearch, "front_hand");
             m_Screen.AddButton("Video", () => m_Web.ToggleVideoFullscreen(), "aspect_ratio");
+            m_Screen.AddButton("Center", () => m_Screen.PlaceInFront(m_Core.Head), "my_location");
+            m_Screen.AddButton("Arrange", ArrangeWindows, "apps");
+            m_Screen.AddButton("Leave", () => m_Core.Demos.ExitToLobby(), "close");
+            m_BrowserWindow = FloatingWindows.Register("Browser", () => m_Screen != null ? m_Screen.Width : 0f,
+                pose => { if (m_Screen != null) m_Screen.Root.SetPositionAndRotation(pose.position, pose.rotation); },
+                distance: 1.8f);
             m_Keys = new SurfaceKeyboard(core.Boundary.transform, m_Material)
             {
                 Text = t => m_Web.InsertText(t),
@@ -68,6 +77,7 @@ namespace CardboardXR.Demos.Desktop
                 PadTap = () => m_Web.Tap(m_Cursor),
             };
             m_Screen.PlaceInFront(core.Head);
+            FloatingWindows.Arrange(core.Head);
             Open(PlayerPrefs.GetString(k_LastKey, k_Home));
         }
 
@@ -75,7 +85,9 @@ namespace CardboardXR.Demos.Desktop
         {
             if (ReferenceEquals(PinchRouter.Handler, this))
                 PinchRouter.Clear();
-            CloseGoogleMaps();
+            CloseGoogleMaps(arrange: false);
+            FloatingWindows.Unregister(m_BrowserWindow);
+            m_BrowserWindow = null;
             m_Web?.Dispose();
             m_Web = null;
             m_Screen?.Destroy();
@@ -148,21 +160,34 @@ namespace CardboardXR.Demos.Desktop
             };
             m_MapsScreen.AddButton("Back", () => m_MapsWeb?.Back(), "chevron_left");
             m_MapsScreen.AddButton("Reload", () => m_MapsWeb?.Reload(), "refresh");
+            m_MapsScreen.AddButton("Center", () => m_MapsScreen?.PlaceInFront(m_Core.Head), "my_location");
             m_MapsScreen.AddButton("Close", CloseGoogleMaps, "close");
-            m_MapsScreen.PlaceInFront(m_Core.Head);
-            m_MapsScreen.Root.position += m_Core.Head.right * 1.05f;
+            m_MapsWindow = FloatingWindows.Register("Google Maps", () => m_MapsScreen != null ? m_MapsScreen.Width : 0f,
+                pose => { if (m_MapsScreen != null) m_MapsScreen.Root.SetPositionAndRotation(pose.position, pose.rotation); },
+                distance: 1.8f);
             m_MapsWeb.Load("https://www.google.com/maps/");
+            FloatingWindows.Arrange(m_Core.Head);
 #else
             Open("https://www.google.com/maps/");
 #endif
         }
 
-        void CloseGoogleMaps()
+        void CloseGoogleMaps(bool arrange = true)
         {
+            FloatingWindows.Unregister(m_MapsWindow);
+            m_MapsWindow = null;
             m_MapsWeb?.Dispose();
             m_MapsWeb = null;
             m_MapsScreen?.Destroy();
             m_MapsScreen = null;
+            if (arrange && m_Core != null && m_Screen != null)
+                FloatingWindows.Arrange(m_Core.Head);
+        }
+
+        void ArrangeWindows()
+        {
+            if (m_Core != null)
+                FloatingWindows.Arrange(m_Core.Head);
         }
 
         void OpenKeyboard()
