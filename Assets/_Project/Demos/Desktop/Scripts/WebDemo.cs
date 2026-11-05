@@ -161,7 +161,7 @@ namespace CardboardXR.Demos.Desktop
             m_MapsScreen.AddButton("Back", () => m_MapsWeb?.Back(), "chevron_left");
             m_MapsScreen.AddButton("Reload", () => m_MapsWeb?.Reload(), "refresh");
             m_MapsScreen.AddButton("Center", () => m_MapsScreen?.PlaceInFront(m_Core.Head), "my_location");
-            m_MapsScreen.AddButton("Close", CloseGoogleMaps, "close");
+            m_MapsScreen.AddButton("Close", () => CloseGoogleMaps(), "close");
             m_MapsWindow = FloatingWindows.Register("Google Maps", () => m_MapsScreen != null ? m_MapsScreen.Width : 0f,
                 pose => { if (m_MapsScreen != null) m_MapsScreen.Root.SetPositionAndRotation(pose.position, pose.rotation); },
                 distance: 1.8f);
